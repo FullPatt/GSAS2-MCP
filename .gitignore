@@ -45,3 +45,8 @@ build
 *.lst
 
 *~
+
+# Fortran build artifacts
+*.mod
+fortranobject.c
+fortranobject.h
