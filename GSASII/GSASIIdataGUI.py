@@ -535,6 +535,7 @@ def ShowVersions():
     version = '?'
     versionDict['errors'] = ''
     warn = False
+    toonew = False
     for s,m in pkgList:
         msg = ''
         if s == 'Python':
@@ -563,13 +564,13 @@ def ShowVersions():
                     msg += "Version is known to be buggy"
                     warn = True
                     break
-        if s in versionDict['tooNewUntested'] and not warn:
+        if s in versionDict['tooNewUntested']:
             match = compareVersions(pkgver,versionDict['tooNewUntested'][s])
             if match >= 0:
                 msg += "\n              "
                 msg += "New untested version; please keep us posted"
-                warn = True
-        if s in versionDict['tooNewWarn'] and not warn:
+                toonew = True
+        if s in versionDict['tooNewWarn'] and not toonew:
             match = compareVersions(pkgver,versionDict['tooNewWarn'][s])
             if match >= 0:
                 msg += "Tests incomplete w/suspected bugs; Please report problems"
@@ -688,6 +689,14 @@ environment as well as the latest GSAS-II version.
 For information on GSAS-II package requirements see
 https://gsas-ii.readthedocs.io/en/latest/packages.html''')
         print(70*'=','\n')
+    elif toonew:
+        print(70*'=')
+        print('''You are running GSAS-II in a Python environment with untested 
+package(s), as noted above. Please report problems. 
+If you see any, you are suggested to install an additional
+copy of GSAS-II from one of the gsas2full installers (see
+https://GSASII.github.io/).''')
+        print(70*'=','\n')
     print(GSASIIpath.getG2VersionInfo())
 
 def TestOldVersions():
@@ -789,6 +798,22 @@ class GSASII(wx.Frame):
     :param parent: reference to parent application
 
     '''
+    def set_console_title(self,title: str):
+        """
+        Sets the console/terminal window title.
+        Works on Windows, Linux, and macOS terminals that support ANSI escape codes.
+        """
+        if not isinstance(title, str):
+            raise TypeError("Title must be a string.")
+
+        if sys.platform == "win32":
+            # Windows-specific method
+            os.system(f"title {title}")
+        else:
+            # ANSI escape sequence for Unix-like systems
+            sys.stdout.write(f"\33]0;{title}\a")
+            sys.stdout.flush()
+
     def _Add_FileMenuItems(self, parent):
         '''Add items to File menu
         '''
@@ -994,7 +1019,11 @@ class GSASII(wx.Frame):
 
     def OnImportGeneric(self,reader,readerlist,label,multiple=False,
         usedRanIdList=[],Preview=True,load2Tree=False,filename=None):
-        '''Used for all imports, including Phases, datasets, images...
+        '''Used for all imports from GUI, including Phases, datasets, images...
+
+        N.B. The code here is largely duplicated in 
+        :func:`GSASIIscriptable:import_generic` so any changes made here
+        need to be duplicated there, too. 
 
         Called from :meth:`GSASII.OnImportPhase`, :meth:`GSASII.OnImportImage`,
         :meth:`GSASII.OnImportSfact`, :meth:`GSASII.OnImportPowder`,
@@ -1273,6 +1302,10 @@ class GSASII(wx.Frame):
         reader item associated with the menu item, which will be
         None for the last menu item, which is the "guess" option
         where all appropriate formats will be tried.
+
+        N.B. The code here is largely duplicated in 
+        :mod:`GSASIIscriptable` so any changes made here
+        need to be duplicated there, too. 
         '''
         # look up which format was requested
         reqrdr = self.ImportMenuId.get(event.GetId())
@@ -1365,6 +1398,15 @@ If you continue from this point, it is quite likely that all intensity computati
                         Constraints['_Explain'].update(i)
                     else:
                         Constraints['Phase'].append(i)
+            if rd.ConstraintOffsets:  # make a dict with offset values to apply to values
+                Constraints['_OffsetKeys'] = Constraints.get('_OffsetKeys',[])
+                Constraints['_OffsetVals'] = Constraints.get('_OffsetVals',[])
+                for d in rd.ConstraintOffsets:
+                    var = d['var']
+                    AtRanId = rd.Phase['Atoms'][d['atomnum']][-1]
+                    prm = G2obj.G2VarObj([rd.Phase['ranId'],None,var,AtRanId])
+                    Constraints['_OffsetKeys'].append(prm)
+                    Constraints['_OffsetVals'].append(d['value'])
             # make ISODISTORT magnetic phase constraints here
             Phases = self.GetPhaseData()
             prevPhases = list(Phases.keys())
@@ -1489,7 +1531,6 @@ If you continue from this point, it is quite likely that all intensity computati
                 Constraints['HAP'] += G2lat.GenHAPConstraints(Vratio,oRanId,nRanId,hRanId)
         wx.EndBusyCursor()
         self.EnableRefineCommand()
-
         return # success
 
     def _Add_ImportMenu_Image(self,parent):
@@ -1513,6 +1554,10 @@ If you continue from this point, it is quite likely that all intensity computati
         where all appropriate formats will be tried.
 
         A reader object is filled each time an image is read.
+
+        N.B. The code here is largely duplicated in 
+        :mod:`GSASIIscriptable` so any changes made here
+        need to be duplicated there, too. 
         '''
         self.CheckNotebook()
         # look up which format was requested
@@ -1541,6 +1586,10 @@ If you continue from this point, it is quite likely that all intensity computati
         reader item associated with the menu item, which will be
         None for the last menu item, which is the "guess" option
         where all appropriate formats will be tried.
+
+        N.B. The code here is largely duplicated in 
+        :mod:`GSASIIscriptable` so any changes made here
+        need to be duplicated there, too. 
         '''
         # get a list of existing histograms
         HKLFlist = []
@@ -1798,30 +1847,10 @@ If you continue from this point, it is quite likely that all intensity computati
                     header='Select default inst parms',useCancel=True)
                 if res is None: return None
                 rd.instfile = ''
-                if 'lab data' in choices[res]:
-                    rd.Sample.update({'Type':'Bragg-Brentano','Shift':[0.,False],'Transparency':[0.,False],
-                        'SurfRoughA':[0.,False],'SurfRoughB':[0.,False]})
-                else:
-                    rd.Sample.update({'Type':'Debye-Scherrer','Absorption':[0.,False],'DisplaceX':[0.,False],
-                        'DisplaceY':[0.,False]})
                 if 'Generic' in choices[res]:
                     rd.instmsg = 'default: '+dI.defaultIparm_lbl[res]
                     Inst = self.ReadPowderInstprm(dI.defaultIparms[res],bank,rd)
                     return Inst    #this is [Inst1,Inst2] a pair of dicts
-                    # The input below is now requested for each bank in OnImportPowder
-                    # dlg = G2G.MultiDataDialog(self,title='Generic TOF detector bank',
-                    #     prompts=['Total FP','2-theta',],values=[25.0,150.,],
-                    #         limits=[[6.,200.],[5.,175.],],formats=['%6.2f','%6.1f',])
-                    # if dlg.ShowModal() == wx.ID_OK: #strictly empirical approx.
-                    #     FP,tth = dlg.GetValues()
-                    #     difC = 505.632*FP*sind(tth/2.)
-                    #     sig1 = 50.+2.5e-6*(difC/tand(tth/2.))**2
-                    #     bet1 = .00226+7.76e+11/difC**4
-                    #     Inst[0]['difC'] = [difC,difC,0]
-                    #     Inst[0]['sig-1'] = [sig1,sig1,0]
-                    #     Inst[0]['beta-1'] = [bet1,bet1,0]
-                    #     return Inst    #this is [Inst1,Inst2] a pair of dicts
-                    # dlg.Destroy()
                 else:
                     rd.instmsg = 'default: '+dI.defaultIparm_lbl[res]
                     inst1,inst2 = self.ReadPowderInstprm(dI.defaultIparms[res],bank,rd)
@@ -1991,6 +2020,10 @@ If you continue from this point, it is quite likely that all intensity computati
         where all appropriate formats will be tried.
 
         Also reads an instrument parameter file for each dataset.
+
+        N.B. The code here is largely duplicated in 
+        :mod:`GSASIIscriptable` so any changes made here
+        need to be duplicated there, too. 
         '''
         FP,tth = 25.0,150.
         # get a list of existing histograms
@@ -2039,23 +2072,30 @@ If you continue from this point, it is quite likely that all intensity computati
                     Iparms = {}
 #                    lastVals = (rd.powderdata[0].min(),rd.powderdata[0].max(),len(rd.powderdata[0]))
                 iSource = rd.instmsg
-            # for defaulted TOF data, reset the default bank number & for generic get FP/2Th
-            if iSource.startswith('default:') and 'Bank' in Iparm1 and 'T' in Iparm1['Type'][0]:
-                if 'Generic' in iSource:
-                    dlg = G2G.MultiDataDialog(self,title='Generic TOF detector bank',
-                        prompts=['Total flight path','2-theta',],values=[FP,tth],
-                            limits=[[6.,200.],[5.,175.],],formats=['%6.2f','%6.1f',],
-                            header=f'Set detector info for\n{rd.idstring}')
-                    if dlg.ShowModal() == wx.ID_OK: #strictly empirical approx.
-                        FP,tth = dlg.GetValues()
-                        difC = 505.632*FP*sind(tth/2.)
-                        sig1 = 50.+2.5e-6*(difC/tand(tth/2.))**2
-                        bet1 = .00226+7.76e+11/difC**4
-                        Iparm1['difC'] = [difC,difC,0]
-                        Iparm1['sig-1'] = [sig1,sig1,0]
-                        Iparm1['beta-1'] = [bet1,bet1,0]
-                    dlg.Destroy()
-                Iparm1['Bank'][0] = Iparm1['Bank'][1] = ihst+1
+            if iSource.startswith('default:'): # Instrument parameters are set from defaults
+                if 'lab data' in iSource:
+                    rd.Sample.update({'Type':'Bragg-Brentano','Shift':[0.,False],'Transparency':[0.,False],
+                        'SurfRoughA':[0.,False],'SurfRoughB':[0.,False]})
+                else:
+                    rd.Sample.update({'Type':'Debye-Scherrer','Absorption':[0.,False],'DisplaceX':[0.,False],
+                        'DisplaceY':[0.,False]})
+                # for defaulted TOF data, reset the default bank number & for generic get FP/2Th
+                if 'Bank' in Iparm1 and 'T' in Iparm1['Type'][0]:
+                    if 'Generic' in iSource:
+                        dlg = G2G.MultiDataDialog(self,title='Generic TOF detector bank',
+                            prompts=['Total flight path','2-theta',],values=[FP,tth],
+                                limits=[[6.,200.],[5.,175.],],formats=['%6.2f','%6.1f',],
+                                header=f'Set detector info for\n{rd.idstring}')
+                        if dlg.ShowModal() == wx.ID_OK: #strictly empirical approx.
+                            FP,tth = dlg.GetValues()
+                            difC = 505.632*FP*sind(tth/2.)
+                            sig1 = 50.+2.5e-6*(difC/tand(tth/2.))**2
+                            bet1 = .00226+7.76e+11/difC**4
+                            Iparm1['difC'] = [difC,difC,0]
+                            Iparm1['sig-1'] = [sig1,sig1,0]
+                            Iparm1['beta-1'] = [bet1,bet1,0]
+                        dlg.Destroy()
+                    Iparm1['Bank'][0] = Iparm1['Bank'][1] = ihst+1
             # override any keys in read instrument parameters with ones set in import
             for key in Iparm1:
                 if key in rd.instdict:
@@ -2625,6 +2665,8 @@ If you continue from this point, it is quite likely that all intensity computati
         None for the last menu item, which is the "guess" option
         where all appropriate formats will be tried.
         Small angle data is presumed to be as QIE form for either x-rays or neutrons
+
+        N.B. This code is not yet duplicated in :mod:`GSASIIscriptable`. 
         '''
 
         def GetSASDIparm(reader):
@@ -2718,6 +2760,8 @@ If you continue from this point, it is quite likely that all intensity computati
         None for the last menu item, which is the "guess" option
         where all appropriate formats will be tried.
         Reflectometry data is presumed to be in QIE form for x-rays of neutrons
+
+        N.B. This code is not yet duplicated in :mod:`GSASIIscriptable`. 
         '''
 
         def GetREFDIparm(reader):
@@ -2817,6 +2861,10 @@ If you continue from this point, it is quite likely that all intensity computati
         reader item associated with the menu item, which will be
         None for the last menu item, which is the "guess" option
         where all appropriate formats will be tried.
+
+        N.B. The code here is largely duplicated in 
+        :mod:`GSASIIscriptable` so any changes made here
+        need to be duplicated there, too. 
         '''
         # get a list of existing histograms
         PDFlist = []
@@ -3150,7 +3198,7 @@ If you continue from this point, it is quite likely that all intensity computati
         self.dataWindow = G2DataWindow(self.mainPanel)
         dataSizer = wx.BoxSizer(wx.VERTICAL)
         self.dataWindow.SetSizer(dataSizer)
-        sash = max(min(100,GSASIIpath.GetConfigValue('Split_Loc',250)),500)
+        sash = min(max(100,GSASIIpath.GetConfigValue('Split_Loc',250)),500)
         # if GSASIIpath.GetConfigValue('debug'):
         #     print('SplitterWindow sash=',sash,GSASIIpath.GetConfigValue('Split_Loc'))
         self.mainPanel.SplitVertically(self.treePanel, self.dataWindow.outer, sash)
@@ -3292,10 +3340,7 @@ If you continue from this point, it is quite likely that all intensity computati
             img = self.Image.Scale(22, 22).ConvertToBitmap()
         else:
             img = self.Image.ConvertToBitmap()
-        if 'phoenix' in wx.version():
-            self.SetIcon(wx.Icon(img))
-        else:
-            self.SetIcon(wx.IconFromBitmap(img))
+        self.SetIcon(wx.Icon(img))
         self.Bind(wx.EVT_CLOSE, self.ExitMain)
         self.GSASprojectfile = ''
         self.dirname = os.path.abspath(os.path.expanduser('~'))       #start in the users home directory by default; may be meaningless
@@ -4473,6 +4518,8 @@ If you continue from this point, it is quite likely that all intensity computati
         self.init_vars()
         try:
             self.StartProject()         #open the file if possible
+            self.set_console_title('GSAS-II project file: '+self.GSASprojectfile)
+
         except:
             print ('\nError opening file '+filename)
             import traceback
@@ -4521,6 +4568,7 @@ If you continue from this point, it is quite likely that all intensity computati
         seqId = None
         G2IO.ProjFileOpen(self)
         self.GPXtree.SetItemText(self.root,'Project: '+self.GSASprojectfile)
+        self.set_console_title('GSAS-II project file: '+self.GSASprojectfile)
         self.GPXtree.Expand(self.root)
         self.HKL = np.array([])
         self.Extinct = []
@@ -4542,18 +4590,18 @@ If you continue from this point, it is quite likely that all intensity computati
                 if data:
                     for item in self.Refine: item.Enable(True)
             item, cookie = self.GPXtree.GetNextChild(self.root, cookie)
-        if phaseId: # show all phases
+        if phaseId: # always show all phases
             self.GPXtree.Expand(phaseId)
-        if seqId:
+        if seqId: # open on sequential if present
             self.EnablePlot = True
             SelectDataTreeItem(self,seqId)
             self.GPXtree.SelectItem(seqId)  # needed on OSX or item is not selected in tree; perhaps not needed elsewhere
-        elif Id:
+        elif Id: # otherwise open on 1st histogram
             self.EnablePlot = True
             self.GPXtree.Expand(Id)
             SelectDataTreeItem(self,Id)
             self.GPXtree.SelectItem(Id)  # needed on OSX or item is not selected in tree; perhaps not needed elsewhere
-        elif phaseId:
+        elif phaseId and self.GPXtree.GetChildrenCount(phaseId) > 0: # otherwise, 1st phase
             Id = phaseId
             # open 1st phase
             Id, unused = self.GPXtree.GetFirstChild(phaseId)
@@ -4686,6 +4734,7 @@ If you continue from this point, it is quite likely that all intensity computati
                 config = G2G.GetConfigValsDocs()
                 GSASIIpath.addPrevGPX(self.GSASprojectfile,config)  # add new name
                 G2G.SaveConfigVars(config)
+                self.set_console_title('GSAS-II project file: '+self.GSASprojectfile)
                 return True
             else:
                 return False
@@ -5782,7 +5831,13 @@ No: least-squares fitting starts with previously fit structure factors.'''
                 tbl.append((i,Rvals['parmDictBeforeFit'][i],Rvals['parmDictAfterFit'][i],
                                 Rvals['parmDictSigDict'].get(i),txt))
             lbl = f'Refinement results, Rw={Rw:.3f}'
-            ans = G2G.G2AfterFit(self,text,lbl,tbl)  # this replaces the next 8 lines
+            if Controls['max cyc']:
+                ans = G2G.G2AfterFit(self,text,lbl,tbl)
+            else:
+                G2G.G2MessageBox(self,
+                    'Zero cycle "refinement" computation completed',lbl)
+                self.reloadFromGPX(rtext,Rvals)
+                ans = None
             if ans == wx.ID_OK:  # refinement has been accepted save, log & display
                 self.reloadFromGPX(rtext,Rvals)
                 G2IO.LogCellChanges(self)
@@ -6664,6 +6719,7 @@ class G2DataWindow(wx.ScrolledWindow):      #wxscroll.ScrolledPanel):
         '''define all GSAS-II data window menus.
         NB: argument order conforms to both classic & phoenix variants for wx.
         Do not use argument= for these as the argument names are different for classic & phoenix
+        NB: GSAS-II now (7/10/2026) assumes phoenix variant wx only
         '''
 
 #### GSAS-II Menu items
@@ -6713,6 +6769,14 @@ class G2DataWindow(wx.ScrolledWindow):      #wxscroll.ScrolledPanel):
     #        self.ConstraintEdit.Append(id=G2G.wxID_ADDRIDING, kind=wx.ITEM_NORMAL,text='Add H riding constraints',
     #            help='Add H atom riding constraints between atom parameter values')
     #        self.ConstraintEdit.Enable(G2G.wxID_ADDRIDING,False)
+            G2G.Define_wxId('wxID_CONSTREXPORT')
+            self.ConstraintEdit.Append(G2G.wxID_CONSTREXPORT,
+                            'Export constraints',
+                            'Write a text file with constraints')
+            G2G.Define_wxId('wxID_CONSTRIMPORT')
+            self.ConstraintEdit.Append(G2G.wxID_CONSTRIMPORT,
+                            'Import constraints',
+                            'Read a text file to create new constraints')
             self.ConstraintEdit.Append(G2G.wxID_SHOWISO,'Show New Var modes',
                     'Show New Var constraints and dependent vars')
             self.ConstraintEdit.Enable(G2G.wxID_SHOWISO,False)
@@ -7292,6 +7356,8 @@ class G2DataWindow(wx.ScrolledWindow):      #wxscroll.ScrolledPanel):
             ImageParams = wx.Menu(title='')
             self.ImageMenu.Append(menu=ImageParams, title='Parms')
             ImageParams.Append(G2G.wxID_IMCOPYCONTROLS,'Copy Controls','Copy image controls to other images')
+            G2G.Define_wxId('wxID_IMCOPYFLAGS')
+            ImageParams.Append(G2G.wxID_IMCOPYFLAGS,'Copy Flags','Copy image refinement settings to other images')
             ImageParams.Append(G2G.wxID_IMCOPYSELECTED,'Copy Selected','Copy selected image controls to other images')
             ImageParams.Append(G2G.wxID_IMSAVECONTROLS,'Save Controls','Save image controls to file')
             ImageParams.Append(G2G.wxID_SAVESELECTEDCONTROLS,'Save Multiple Controls','Save controls from selected images to file')
@@ -7640,8 +7706,6 @@ class G2DataWindow(wx.ScrolledWindow):      #wxscroll.ScrolledPanel):
             self.DrawAtomEdit.Append(G2G.wxID_DRAWFILLCELL,'Fill unit cell','Fill unit cell with selected atoms')
             G2G.Define_wxId('wxID_DRAWADDMOLECULE')
             self.DrawAtomEdit.Append(G2G.wxID_DRAWADDMOLECULE,'Complete molecule','Cyclicly add atoms bonded to selected atoms')
-            G2G.Define_wxId('wxID_DRAWVOIDMAP')
-            self.DrawAtomEdit.Append(G2G.wxID_DRAWVOIDMAP,'Create void map','Create a map of locations outside of any VDW radius')
             self.DrawAtomEdit.Append(G2G.wxID_DRAWDELETE,'Delete atoms','Delete selected atoms from drawing set')
             G2G.Define_wxId('wxID_RELOADATOMS')
             self.DrawAtomEdit.Append(G2G.wxID_RELOADATOMS,'Update draw atoms','Update atom drawing list')
@@ -7656,6 +7720,8 @@ class G2DataWindow(wx.ScrolledWindow):      #wxscroll.ScrolledPanel):
             G2G.Define_wxId('wxID_DRAWISO')            
             self.DrawAtomCompute.Append(G2G.wxID_DRAWISO,'Show New Var modes',
                                 'Show New Var constraints and dependent vars')
+            G2G.Define_wxId('wxID_DRAWVOIDMAP')
+            self.DrawAtomCompute.Append(G2G.wxID_DRAWVOIDMAP,'Create void map','Create a map of locations outside of any VDW radius')
             self.DrawAtomRestraint.Append(G2G.wxID_DRAWRESTRBOND,'Add bond restraint','Add bond restraint for selected atoms (2)')
             self.DrawAtomRestraint.Append(G2G.wxID_DRAWRESTRANGLE,'Add angle restraint',
                 'Add angle restraint for selected atoms (3: one end 1st)')
@@ -9168,7 +9234,7 @@ def SelectDataTreeItem(G2frame,item,oldFocus=None):
                 Nvars = len(data['varyList'])
                 Rvals = data['Rvals']
                 text = ('\nTotal residuals after last refinement:                                       \n'+
-                        '\twR = {:.3f}\n\tchi**2 = {:.1f}\n\tGOF = {:.2f}').format(
+                        '\twR = {:.3f}\n\tχ**2 = {:.1f}\n\tGOF = {:.2f}').format(
                         Rvals['Rwp'],Rvals['chisq'],Rvals['GOF'])
                 text += '\n\tNobs = {}\n\tNvals = {}\n\tSVD zeros = {}'.format(
                     Rvals['Nobs'],Nvars,Rvals.get('SVD0',0.))
@@ -9180,13 +9246,23 @@ def SelectDataTreeItem(G2frame,item,oldFocus=None):
                     text += '\n\tReduced χ**2 = {:.2f}'.format(Rvals['GOF']**2)
                 mainSizer.Add(wx.StaticText(G2frame.dataWindow,wx.ID_ANY,text))
                 if Rvals.get('RestraintSum',0) > 0:
-                    chisq_data = (Rvals['chisq']-Rvals['RestraintSum'])/(Rvals['Nobs']-Rvals['Nvars'])
+                    diffr_chisq = (Rvals['chisq']-Rvals['RestraintSum'])
+                    chisq_data = (diffr_chisq)/(Rvals['Nobs']-Rvals['Nvars'])
                     lbl = '\nData-only residuals (without restraints)'
+                    lbl += f'\n\tχ**2 = {diffr_chisq:.1f}'
                     lbl += f'\n\tGOF = {np.sqrt(chisq_data):.2f}'
                     lbl += f'\n\tReduced χ**2 = {chisq_data:.2f}'
                     mainSizer.Add(wx.StaticText(G2frame.dataWindow,label=lbl))
+                Restraints = Rvals.get('Restraints',{})
+                if len(Restraints):
+                    nRestraints = Rvals['nRestraints']
+                    lbl = '\nRestraint residuals:'
+                    for name in Restraints:
+                        if nRestraints[name]:
+                            lbl += '\n               %s: N = %d, χ**2 = %.1f'%(name,nRestraints[name],Restraints[name])
+                    mainSizer.Add(wx.StaticText(G2frame.dataWindow,label=lbl))
+                    
                 plotSizer = wx.BoxSizer(wx.HORIZONTAL)
-
                 if 'Lastshft' in data and not data['Lastshft'] is None:
                     showShift = wx.Button(G2frame.dataWindow,label='Plot shift/esd -- last refinement')
                     showShift.Bind(wx.EVT_BUTTON,OnShowShift)
@@ -9340,8 +9416,8 @@ def SelectDataTreeItem(G2frame,item,oldFocus=None):
         # debug stuff
         # if GSASIIpath.GetConfigValue('debug'):
         #     print('Debug: reloading G2phG')
-        #     import imp
-        #     imp.reload(G2phG)
+        #     from importlib import reload
+        #     reload(G2phG)
         # end debug stuff
         G2phG.UpdatePhaseData(G2frame,item,data)
     elif G2frame.GPXtree.GetItemText(parentID) == 'Restraints':

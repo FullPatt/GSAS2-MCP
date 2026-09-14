@@ -15,6 +15,17 @@ try:
     import h5py
 except ImportError:
     h5py = None
+    msg = 'HDF5 image reader skipped because HDF5 modules not installed.'
+    from .. import GSASIIfiles as G2fil
+    G2fil.ImportErrorMsg(msg,{'HDF5 file support':['hdf5','h5py']})
+if h5py:
+    try:
+        import hdf5plugin
+    except ImportError:
+        msg = 'HDF5 image reader: recommend installing hdf5plugin for compressed files.'
+        from .. import GSASIIfiles as G2fil
+        G2fil.ImportErrorMsg(msg,{'HDF5 compression support (recommended)':['hdf5plugin']})
+
 from .. import GSASIIobj as G2obj
 from .. import GSASIIfiles as G2fil
 from .. import GSASIIpath
@@ -79,11 +90,14 @@ class HDF5_Reader(G2obj.ImportImage):
         if imagenum is None: imagenum = 1
         quick = False
         # do we have a image number or a map to the section with the image?
+        imageTag = None
         try:
             int(imagenum) # test if image # is a tuple
         except: # pull the section name and number out from the imagenum value
-            kwargs = {'name':imagenum[0],'num':imagenum[1]}
+            readargs = {'name':imagenum[0],'num':imagenum[1]}
+            imageTag = imagenum
             quick = True
+            self.UniversalComments = self.visit(fp)
         # set up an index as to where images are found
         self.buffer = kwarg.get('buffer',{})
         if not quick and not self.buffer.get('imagemap'):
@@ -138,10 +152,23 @@ class HDF5_Reader(G2obj.ImportImage):
                 self.errors = 'No images selected from file'
                 fp.close()
                 return False
-            kwargs = {'imagenum':imagenum}
-        self.Data,self.Npix,self.Image = self.readDataset(fp,**kwargs)
+            readargs = {'imagenum':imagenum}
+        try:
+            self.Data,self.Npix,self.Image = self.readDataset(fp,**readargs)
+        except OSError as msg: # gets thrown by HDF5 for compressed files
+            if 'plugin' in str(msg):
+                self.errors = 'Unable to read image. This is likely because the\nhdf5plugin compression module is not installed'
+            else:
+                self.errors = f'Unable to read image. Error message:\n {msg}'
+            print(msg)
+            return False
         if quick:
             fp.close()
+            if GSASIIpath.GetConfigValue('debug'): print(f'Read image {imagenum} from file {filename}')
+            # pointer to section of file & image number here
+            if imageTag:
+                self.Data['ImageTag'] = imageTag 
+            self.Data['ImageSection'] = imagenum[0]
             return True
         if self.Npix == 0:
             self.errors = 'No valid images found in file'
@@ -240,7 +267,8 @@ class HDF5_Reader(G2obj.ImportImage):
                     else:
                         print(f'Skipping entry {dset.name}. Shape is {dims}')
                 except Exception as msg:
-                    print(f'Skipping entry {dset.name} Error getting shape\n{msg}')
+                    #print(f'Skipping entry {dset.name} Error getting shape\n{msg}')
+                    pass
         fp.visititems(func)
         return header
 
@@ -249,9 +277,6 @@ class HDF5_Reader(G2obj.ImportImage):
         '''
         if name is None:
             name,num,size = self.buffer['imagemap'][imagenum-1] # look up image in map
-            quick = False
-        else:
-            quick = True
         dset = fp[name]
         if num == None:
             image = dset[()]
@@ -266,9 +291,7 @@ class HDF5_Reader(G2obj.ImportImage):
             msg = f'Unexpected image dimensions {name}'
             print(msg)
             raise Exception(msg)
-        if quick:
-            return {},None,image.T
-        # add parametric values to the brginning of the comments
+        # add parametric values to the beginning of the comments
         self.Comments = []
         for k in self.buffer.get('ParamTrackingVars',[]):
             arr = self.buffer['ParamTrackingVars'][k]
@@ -302,7 +325,7 @@ class HDF5_Reader(G2obj.ImportImage):
                     print(f'Using DetPixelSize* for Pixel size: {pixelsize}.')
         except:
             pixelsize = None
-            print(f'No PixelSize[XY], DetSize[XY] or DetPixelSize[XY].')
+            print('No PixelSize[XY], DetSize[XY] or DetPixelSize[XY].')
         # default pixel size (for APS sector 6?)
         if not pixelsize:
             pixelsize = [74.8,74.8]

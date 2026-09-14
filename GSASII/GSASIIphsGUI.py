@@ -13,7 +13,7 @@ to control scrolling.
 Routines for Phase dataframes follow.
 '''
 from __future__ import division, print_function
-import platform
+#import platform
 import os
 import wx
 import wx.grid as wg
@@ -84,6 +84,7 @@ atan2d = lambda x,y: 180.*np.arctan2(y,x)/np.pi
 is_exe = lambda fpath: os.path.isfile(fpath) and os.access(fpath, os.X_OK)
 sqt2 = np.sqrt(2.)
 sqt3 = np.sqrt(3.)
+forpi = 4.*np.pi
 
 # previous rigid body selections
 prevResId = None
@@ -1546,7 +1547,7 @@ def SetDrawingDefaults(drawingData):
     for key in defaultDrawing:
         if key not in drawingData: drawingData[key] = defaultDrawing[key]
 
-def updateAddRBorientText(G2frame,testRBObj,Bmat,ifSlide=True):
+def updateAddRBorientText(G2frame,testRBObj,Bmat):
     '''Update all origin/orientation text on the Add RB panel or
     on main RB Models page in response to Alt+mouse movement
     '''
@@ -1555,26 +1556,30 @@ def updateAddRBorientText(G2frame,testRBObj,Bmat,ifSlide=True):
     testRBObj['rbObj']['OrientVec'][1:] = np.inner(Bmat,V)
     for i in range(4):
         val = testRBObj['rbObj']['OrientVec'][i]
-        if not i:    #in that BoxSizer from G2SpinWidget
-            BSI = G2frame.testRBObjSizers['OrientVecSiz'][i].GetChildren()[-2].GetWindow()
-        else:
-            BSI = G2frame.testRBObjSizers['OrientVecSiz'][i]
-        BSI.ChangeValue(val)
-    
-    
-    # for i,val in enumerate(testRBObj['rbObj']['OrientVec']):
-    #     if not ifSlide: #skip spin button
-    #         G2frame.testRBObjSizers['OrientVecSiz'][i+1].ChangeValue(val)
-    #     else:
-    #         G2frame.testRBObjSizers['OrientVecSiz'][i].ChangeValue(val)
-    if ifSlide: #from the addRB GUI
+        BSI = G2frame.testRBObjSizers['OrientVecSiz'][i]
+        try:
+            BSI.ChangeValue(val)
+        except:
+            pass
+    if len(G2frame.testRBObjSizers['OrientVecSiz']) > 4:
         G2frame.testRBObjSizers['OrientVecSiz'][4].SetValue(
             int(10*testRBObj['rbObj']['OrientVec'][0]))
+            
+    # if 'Spin' in str(G2frame.testRBObjSizers['OrientVecSiz'][0]):
+    #     for i in range(4):
+    #         val = testRBObj['rbObj']['OrientVec'][i]
+    #         BSI = G2frame.testRBObjSizers['OrientVecSiz'][i+1]
+    #         BSI.ChangeValue(val)
+    # else:  #from the Add RB GUI
+    #     for i,val in enumerate(testRBObj['rbObj']['OrientVec']):
+    #         G2frame.testRBObjSizers['OrientVecSiz'][i].ChangeValue(val)
+    #     G2frame.testRBObjSizers['OrientVecSiz'][4].SetValue(
+    #         int(10*testRBObj['rbObj']['OrientVec'][0]))
     for i,sizer in enumerate(G2frame.testRBObjSizers.get('Xsizers',[])):
         sizer.ChangeValue(testRBObj['rbObj']['Orig'][0][i])
     # redraw asymmetric unit when called on an existing body
-    # if G2frame.testRBObjSizers.get('OnOrien') is None: return
-    # G2frame.testRBObjSizers['OnOrien'](mode=testRBObj['rbObj'].get('drawMode',DrawStyleChoice[4]))
+    if G2frame.testRBObjSizers.get('OnOrien') is None: return
+    G2frame.testRBObjSizers['OnOrien'](mode=testRBObj['rbObj'].get('drawMode',DrawStyleChoice[4]))
 
 def GetReflData(G2frame,phaseName,reflNames):
     ReflData = {'RefList':[],'Type':''}
@@ -4996,12 +5001,8 @@ to use these entries'''
             G2frame.GetStatusBar().SetStatusText('Warning: Atom positions must correspond to 2nd setting for the space group '+SGData['SpGrp'],1)
         if SGData['SGPolax']:
             G2frame.GetStatusBar().SetStatusText('Warning: The location of the origin is arbitrary in '+SGData['SGPolax'],1)
-        if 'phoenix' in wx.version():
-            Atoms.Unbind(wg.EVT_GRID_CELL_CHANGED)
-            Atoms.Bind(wg.EVT_GRID_CELL_CHANGED, ChangeAtomCell)
-        else:
-            Atoms.Unbind(wg.EVT_GRID_CELL_CHANGE)
-            Atoms.Bind(wg.EVT_GRID_CELL_CHANGE, ChangeAtomCell)
+        Atoms.Unbind(wg.EVT_GRID_CELL_CHANGED)
+        Atoms.Bind(wg.EVT_GRID_CELL_CHANGED, ChangeAtomCell)
         Atoms.Unbind(wg.EVT_GRID_CELL_LEFT_DCLICK)
         Atoms.Unbind(wg.EVT_GRID_LABEL_LEFT_DCLICK)
         Atoms.Unbind(wg.EVT_GRID_LABEL_LEFT_CLICK)
@@ -5985,7 +5986,6 @@ to use these entries'''
             binimage = 'Dysnomia64.exe'
         else:
             binimage = 'Dysnomia'
-        is_exe = lambda fpath: os.path.isfile(fpath) and os.access(fpath, os.X_OK)
 
         #path2GSAS2 = os.path.dirname(os.path.abspath(os.path.expanduser(__file__)))
         pathlist = (GSASIIpath.path2GSAS2,
@@ -6159,11 +6159,11 @@ at one of the following locations:
                 return
             G2frame.dataWindow.FRMCDataEdit.Enable(G2G.wxID_RUNRMC,True)
             RMCPdict = data['RMC']['PDFfit']
-            msg = G2pwd.MakePDFfitAtomsFile(data,RMCPdict)
+            msg = G2rmcG.MakePDFfitAtomsFile(data,RMCPdict)
             if msg:
                 G2G.G2MessageBox(G2frame,'ERROR: '+msg,'PDFfit setup failure')
                 return
-            fname = G2pwd.MakePDFfitRunFile(data,RMCPdict)
+            fname = G2rmcG.MakePDFfitRunFile(data,RMCPdict)
             if fname is None:
                 wx.MessageDialog(G2frame,'ERROR: failure to setup PDFfit; check console','PDFfit setup failure',wx.ICON_ERROR).ShowModal()
             else:
@@ -6171,243 +6171,8 @@ at one of the following locations:
                 print('PDFfit file build completed')
 
     def RunPDFfit(event):
-        generalData = data['General']
-        ISOdict = data['ISODISTORT']
-        PDFfit_exec = G2pwd.findPDFfit()  #returns location of python with PDFfit installed
-        if not PDFfit_exec:
-            wx.MessageBox(''' PDFfit2 is not currently installed for this platform.
-    Please contact us for assistance''',caption='No PDFfit2',style=wx.ICON_INFORMATION)
-            return
-        RMCPdict = data['RMC']['PDFfit']
-        pName = generalData['Name'].replace(' ','_')
-        if 'sequential' in RMCPdict['refinement']:
-            rname = 'Seq_PDFfit.py'
-        else:
-            rname = pName+'-PDFfit.py'
-            if not os.path.exists(rname):
-                wx.MessageBox(f'File {rname} does not exist. Has the Operations/"Setup RMC" menu command been run?',
-                                  caption='Run setup',style=wx.ICON_WARNING)
-                return
-        wx.MessageBox(' For use of PDFfit2, please cite:\n\n'+
-                          G2G.GetCite('PDFfit2'),
-                          caption='PDFfit2',style=wx.ICON_INFORMATION)
-        G2frame.OnFileSave(event)
-        print (' GSAS-II project saved')
-        if sys.platform.lower().startswith('win'):
-            batch = open('pdffit2.bat','w')
-            # Include an activate command here
-            p = os.path.split(PDFfit_exec)[0]
-            while p:
-                if os.path.exists(os.path.join(p,'Scripts','activate')):
-                    batch.write('call '+os.path.join(p,'Scripts','activate')+'\n')
-                    break
-                prevp = p
-                p = os.path.split(p)[0]
-                if prevp == p:
-                    print('Note, no activate command found')
-                    break
-            batch.write(PDFfit_exec+' '+rname+'\n')
-            # batch.write('pause')
-            if 'normal' in RMCPdict['refinement']:
-                batch.write('pause')
-            batch.close()
-        else:
-            batch = open('pdffit2.sh','w')
-            batch.write('#!/bin/bash\n')
-            # include an activate command here
-            p = os.path.split(PDFfit_exec)[0]
-            while p:
-                if os.path.exists(os.path.join(p,'bin','activate')):
-                    batch.write('source '+os.path.join(p,'Scripts','activate')+'\n')
-                    break
-                prevp = p
-                p = os.path.split(p)[0]
-                if prevp == p:
-                    print('Note, no activate command found')
-                    break
-
-            batch.write('cd ' + os.path.split(os.path.abspath(rname))[0] + '\n')
-            batch.write(PDFfit_exec + ' ' + os.path.abspath(rname) + '\n')
-            batch.close()
-        if 'sequential' in RMCPdict['refinement']:
-            Id =  G2gd.GetGPXtreeItemId(G2frame,G2frame.root,'Sequential PDFfit2 results')
-#            if Id:
-#                saveSeqResult = G2frame.GPXtree.GetItemPyData(Id)
-#            else:
-            if not Id:
-                SeqResult = {}
-                Id = G2frame.GPXtree.AppendItem(parent=G2frame.root,text='Sequential PDFfit2 results')
-            G2Names = [item.name for item in ISOdict['G2ModeList']]
-            SeqResult = {'SeqPseudoVars':{},'SeqParFitEqList':[]}
-            SeqResult['histNames'] = []         #this clears the previous seq. result!
-            SeqNames = []
-            for itm in range(len(RMCPdict['seqfiles'])):
-                SeqNames.append([itm,RMCPdict['seqfiles'][itm][0]])
-            if RMCPdict['SeqReverse']:
-                SeqNames.reverse()
-            nPDF = len(SeqNames)
-            pgbar = wx.ProgressDialog('Sequential PDFfit','PDF G(R) done = 0',nPDF+1,
-                style = wx.PD_ELAPSED_TIME|wx.PD_AUTO_HIDE|wx.PD_CAN_ABORT)
-            newParms = {}
-            for itm,Item in enumerate(SeqNames):
-                PDFfile = RMCPdict['seqfiles'][Item[0]]
-                pfdata = PDFfile[1]['G(R)'][1].T
-#                    pfname = PDFfile[0].replace(' ','_')
-                pfname = 'Seq_PDF.gr'
-                pfile = open(pfname,'w')
-                for dp in pfdata:
-                    pfile.write('%12.5f%12.5f\n'%(dp[0],dp[1]))
-                pfile.close()
-                rfile = open('Seq_PDFfit_template.py','r')
-                lines = rfile.readlines()       #template lines
-                rfile.close()
-                newlines = []
-                parms = {}
-                Np = 0
-                for line in lines:
-                    if '#sequential' in line:
-                        newlines += "pf.read_data('%s', '%s', 30.0, %.4f)\n"%(pfname,PDFfile[1]['Type'][0],PDFfile[1]['qdamp'][0])
-                        newlines += 'pf.setdata(1)\n'
-                        newlines += 'pf.pdfrange(1, %6.2f, %6.2f)\n'%(PDFfile[1]['Fitrange'][0],PDFfile[1]['Fitrange'][1])
-                        for item in ['dscale','qdamp','qbroad']:
-                            if PDFfile[1][item][1]:
-                                Np += 1
-                                newlines += 'pf.constrain(pf.%s(),"@%d")\n'%(item,Np)
-                                parms[item] = '%d'%Np
-                                if itm and RMCPdict['SeqCopy']:
-                                    newParms[parms[item]] = RMCPdict['Parms'][parms[item]]
-                                else:
-                                    if not itm and 'result' not in PDFfile[1]:
-                                        newParms[parms[item]] = PDFfile[1][item][0]
-                                    else:
-                                        newParms[parms[item]] = PDFfile[1]['result'][parms[item]][0]
-                    elif '#parameters' in line:
-                        startParms = RMCPdict['Parms']
-                        if newParms or RMCPdict['SeqCopy']:
-                            if newParms:
-                                startParms = newParms
-                            for iprm in startParms:
-                                if int(iprm) > 9:
-                                    break
-                                newlines += 'pf.setpar(%s,%.6f)\n'%(iprm,startParms[iprm])
-                            print('Begin dscale: %d %.4f'%(itm,startParms['1']))
-                            for iprm in RMCPdict['Parms']:
-                                if isinstance(RMCPdict['Parms'][iprm],float):
-                                    newlines += 'pf.setpar(%s,%.6f)\n'%(iprm,RMCPdict['Parms'][iprm])
-                                else:
-                                    newlines += 'pf.setpar(%s,%.6f)\n'%(iprm,RMCPdict['Parms'][iprm][0])
-                        elif not RMCPdict['SeqCopy']:
-                            startParms = PDFfile[1]['result']
-                            for iprm in startParms:
-                                newlines += 'pf.setpar(%s,%.6f)\n'%(iprm,startParms[iprm][0])
-                            print('Begin dscale: %d %.4f'%(itm,startParms['1']))
-                    else:
-                        newlines += line
-                rfile= open('Seq_PDFfit.py','w')
-                rfile.writelines(newlines)
-                rfile.close()
-                fName = 'Sequential_PDFfit'     #clean out old PDFfit output files
-                if os.path.isfile(fName+'.res'):
-                    os.remove(fName+'.res')
-                if os.path.isfile(fName+'.rstr'):
-                    os.remove(fName+'.rstr')
-                if os.path.isfile(fName+'.fgr'):
-                    os.remove(fName+'.fgr')
-
-                if sys.platform.lower().startswith('win'):
-                    Proc = subp.Popen('pdffit2.bat',creationflags=subp.CREATE_NEW_CONSOLE)
-                    Proc.wait()     #for it to finish before continuing on
-                else:
-                    if sys.platform == "darwin":
-                        GSASIIpath.MacRunScript(os.path.abspath('pdffit2.sh'))
-                    else:
-                        Proc = subp.Popen(['/bin/bash','pdffit2.sh'])
-                        Proc.wait()
-
-                newParms,Rwp =  G2pwd.UpdatePDFfit(data,RMCPdict)
-                if isinstance(newParms,str):
-                    wx.MessageBox('Singular matrix in PDFfit',caption='PDFfit2 failed',style=wx.ICON_INFORMATION)
-                    break
-                for item in ['dscale','qdamp','qbroad']:
-                    if PDFfile[1][item][1]:
-                        PDFfile[1][item][0] = newParms[parms[item]][0]
-                PDFfile[1]['result'] = copy.deepcopy(newParms)
-                parmDict = copy.deepcopy(newParms)
-                parmDict.update({'Temperature':PDFfile[1]['Temp']})
-                tempList = ['%s-%s'%(parms[item],item) for item in parms]       #these come first
-                parmkeys = [int(item) for item in RMCPdict['ParmNames']]
-                parmkeys.sort()
-                tempList += ['%s-%s'%(item,RMCPdict['ParmNames'][item]) for item in parmkeys]
-                print('result dscale: ',parmDict['1'],' Rw: ',Rwp)
-                atParms = [str(i+21) for i in range(len(G2Names))]
-                varyList = []
-                for item in tempList:
-                    pid = item.split('-')[0]
-                    if pid in atParms:
-                        item = '%s-%s'%(pid,G2Names[int(pid)-21])
-                    varyList.append(item)
-                result = np.array(list(newParms.values())).T
-                SeqResult[PDFfile[0]] = {'variables':result[0],'varyList':varyList,'sig':result[1],'Rvals':{'Rwp':Rwp,},
-                    'covMatrix':[],'title':PDFfile[0],'parmDict':parmDict}
-
-                pfile = open('Sequential_PDFfit.fgr')
-                XYcalc = np.loadtxt(pfile).T[:2]
-                pfile.close()
-                pId = G2gd.GetGPXtreeItemId(G2frame,G2frame.root,PDFfile[0])
-                PDFctrl = G2frame.GPXtree.GetItemPyData(G2gd.GetGPXtreeItemId(G2frame,pId,'PDF Controls'))
-                XYobs = PDFctrl['G(R)'][1]
-                if XYobs.shape[0] < 4:
-                    XYobs = np.concatenate((XYobs,np.zeros_like(XYobs)),axis=0)
-                ibeg = np.searchsorted( XYobs[0],XYcalc[0][0])
-                ifin = ibeg+XYcalc.shape[1]
-                XYobs[2][ibeg:ifin] = XYcalc[1]
-                XYobs[3] = XYobs[1]-XYobs[2]
-                PDFctrl['G(R)'][1] = XYobs
-                SeqResult['histNames'].append(Item[1])
-                GoOn = pgbar.Update(itm,newmsg='PDF G(R) done = %d'%(itm))
-                if not GoOn[0]:
-                    print(' Sequential PDFfit aborted')
-                    break
-
-            pgbar.Destroy()
-            G2frame.GPXtree.SetItemPyData(Id,SeqResult)
-            G2frame.G2plotNB.Delete('Sequential refinement')    #clear away probably invalid plot
-            G2frame.GPXtree.SelectItem(Id)
-
-        else: #normal
-            #remove any old PDFfit output files
-            fName = generalData['Name'].replace(' ','_')+'-PDFfit'
-            if os.path.isfile(fName+'.res'):
-                os.remove(fName+'.res')
-            if os.path.isfile(fName+'.rstr'):
-                os.remove(fName+'.rstr')
-            if os.path.isfile(fName+'N.fgr'):
-                os.remove(fName+'N.fgr')
-            if os.path.isfile(fName+'X.fgr'):
-                os.remove(fName+'X.fgr')
-
-            if sys.platform.lower().startswith('win'):
-                Proc = subp.Popen('pdffit2.bat',creationflags=subp.CREATE_NEW_CONSOLE)
-                Proc.wait()     #for it to finish before continuing on
-            else:
-                if sys.platform == "darwin":
-                    GSASIIpath.MacRunScript(os.path.abspath('pdffit2.sh'))
-                else:
-                    Proc = subp.Popen(['/bin/bash','pdffit2.sh'])
-                    Proc.wait()     #for it to finish before continuing on
-            #update choice? here?
-            dlg = wx.MessageDialog(G2frame,'Check PDFfit console for results; do you want to update?',
-                'PDFfit run finished',wx.YES|wx.NO)
-            try:
-                dlg.CenterOnParent()
-                result = dlg.ShowModal()
-            finally:
-                dlg.Destroy()
-            if result == wx.ID_YES:
-                Error =  G2pwd.UpdatePDFfit(data,RMCPdict)
-                if Error:
-                    wx.MessageBox('PDFfit failed',caption='%s not found'%Error[0],style=wx.ICON_EXCLAMATION)
-            G2rmcG.UpdateRMC(G2frame,data)
+        'Run PDFfit2 in a separate process'
+        G2rmcG.RunPDFfit2(G2frame,data,event)
 
     def Runfullrmc(event):
         fullrmc_exec = G2pwd.findfullrmc()
@@ -6603,11 +6368,13 @@ at one of the following locations:
         original cell
         '''
         fullrmcLoadPhase(super=False)
+
     def OnLoadRMCsuper(event):
         '''Used to load the output from fullrmc with atoms in the simulation
         supercell cell
         '''
         fullrmcLoadPhase(super=True)
+
     def fullrmcLoadPhase(super):
         '''Used to load the output from fullrmc. Creates a new phase,
         reads all atoms & converts coordinates to fractional.
@@ -6851,11 +6618,11 @@ at one of the following locations:
                         RMCPdict[pName+label] = np.sum(Ycalc[1])/np.sum(Yobs[1])
                         print(' %s scale Ycalc/Yobs: %.4f'%(label,RMCPdict[pName+label]))
 #partials plots
-            Labels = {'_PDFpartials.csv':[r'$\mathsf{R,\AA}$','G(R)','RMCP G(R) partials for '],
+            PLabels = {'_PDFpartials.csv':[r'$\mathsf{R,\AA}$','G(R)','RMCP G(R) partials for '],
                 '_SQ1partials.csv':[r'$\mathsf{Q,\AA^{-1}}$','S(Q)','RMCP S(Q) partials for '],
                 '_SQ2partials.csv':[r'$\mathsf{Q,\AA^{-1}}$','S(Q)-2','RMCP S(Q) partials for '],
                 '_FQ1partials.csv':[r'$\mathsf{Q,\AA^{-1}}$','F(Q)','RMCP F(Q) partials for ']}
-            for label in Labels:
+            for label in PLabels:
                 X = []
                 Partials = []
                 if len(files[label]):
@@ -6876,13 +6643,14 @@ at one of the following locations:
                         else:
                             XY = [[X.T,(DX*Y.T)*X.T] for iy,Y in enumerate(Partials) if 'Va' not in Names[iy+1]]
                     Names = [name for name in Names if 'Va' not in name]
-                    ylabel = Labels[label][1]
-                    if 'G(R)' in Labels[label][1]:
+                    ylabel = PLabels[label][1]
+                    if 'G(R)' in PLabels[label][1]:
                         if ifNeut:
-                            title = 'Neutron '+Labels[label][2]+pName
+                            title = 'Neutron '+PLabels[label][2]+pName
                         else:
-                            continue        #skip for now - x-ray partials are missing header record
-                            title = 'X-ray '+Labels[label][2].replace('G','g')+pName
+                            # continue        #skip for now - x-ray partials are missing header record
+                            # title = 'X-ray '+PLabels[label][2].replace('G','g')+pName
+                            title = 'X-ray partials for '+pName
                             ylabel = 'g(R)'
                         sumAtm = 0
                         BLtables = G2elem.GetBLtable(generalData)
@@ -6915,12 +6683,12 @@ at one of the following locations:
                             xy[1] *= bcorr[ixy]
                             xy[1] += Ymin
                         Xmax = np.searchsorted(Ysave[0][0],XY[0][0][-1])
-                        G2plt.PlotXY(G2frame,XY2=XY,XY=[Ysave[0][:,0:Xmax],],labelX=Labels[label][0],
+                        G2plt.PlotXY(G2frame,XY2=XY,XY=[Ysave[0][:,0:Xmax],],labelX=PLabels[label][0],
                             labelY=ylabel,newPlot=True,Title=title,
                             lines=False,names=[r'   $G(R)_{calc}$',]+Names[1:])
                     else:
-                        G2plt.PlotXY(G2frame,XY,labelX=Labels[label][0],
-                            labelY=ylabel,newPlot=True,Title=Labels[label][2]+pName,
+                        G2plt.PlotXY(G2frame,XY,labelX=PLabels[label][0],
+                            labelY=ylabel,newPlot=True,Title=PLabels[label][2]+pName,
                             lines=True,names=Names[1:])
 #chi**2 plot
             X = []
@@ -7708,12 +7476,8 @@ at one of the following locations:
         drawAtoms.SetColSize(colLabels.index('Style'),80)
         drawAtoms.SetColSize(colLabels.index('Color'),50)
         drawAtoms.SetRowLabelSize(45)
-        if 'phoenix' in wx.version():
-            drawAtoms.Unbind(wg.EVT_GRID_CELL_CHANGED)
-            drawAtoms.Bind(wg.EVT_GRID_CELL_CHANGED, RefreshDrawAtomGrid)
-        else:
-            drawAtoms.Unbind(wg.EVT_GRID_CELL_CHANGE)
-            drawAtoms.Bind(wg.EVT_GRID_CELL_CHANGE, RefreshDrawAtomGrid)
+        drawAtoms.Unbind(wg.EVT_GRID_CELL_CHANGED)
+        drawAtoms.Bind(wg.EVT_GRID_CELL_CHANGED, RefreshDrawAtomGrid)
         drawAtoms.Unbind(wg.EVT_GRID_LABEL_LEFT_DCLICK)
         drawAtoms.Unbind(wg.EVT_GRID_CELL_LEFT_DCLICK)
         drawAtoms.Unbind(wg.EVT_GRID_LABEL_LEFT_CLICK)
@@ -8574,6 +8338,13 @@ at one of the following locations:
         G2stMn.DisAglTor(DATData)
 
     def MapVoid(event):
+        def onColor(event):
+            'respond to color button press'
+            c = event.GetEventObject().GetValue() # RGBA
+            voidPar['color'] = [int(i*c.alpha/255) for i in (
+                c.red,c.green,c.blue)] # RGB w/black background
+            event.GetEventObject().SetValue(voidPar['color'])
+        import wx.lib.colourselect as csel
         generalData = data['General']
         rMax = max(data['General']['vdWRadii'])
         cell = data['General']['Cell'][1:7]
@@ -8584,7 +8355,8 @@ at one of the following locations:
                     'Set parameters for void computation for phase '+generalData.get('Name','?')))
         # get cell ranges
         xmax = 2. - rMax/cell[0]
-        voidPar = {'a':1., 'b':1., 'c':1., 'grid':.25, 'probe':0.5}
+        voidPar = {'a':1., 'b':1., 'c':1., 'grid':.25, 'probe':0.5,
+                       'drawsize':0.05,'brightness':3.0, 'color':[50,50,255]}
         for i in ('a', 'b', 'c'):
             mainSizer.Add(G2G.G2SliderWidget(voidDlg,voidPar,i,'Max '+i+' value: ',0.,xmax,100))
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -8594,6 +8366,21 @@ at one of the following locations:
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
         hSizer.Add(wx.StaticText(voidDlg,wx.ID_ANY,'Probe radius (A)'))
         hSizer.Add(G2G.ValidatedTxtCtrl(voidDlg,voidPar,'probe',nDig=(5,2), xmin=0.1, xmax=2., typeHint=float))
+
+        G2G.HorizontalLine(mainSizer,voidDlg)
+        mainSizer.Add(wx.StaticText(voidDlg,wx.ID_ANY,
+                    'Void map visualization parameters'))
+        mainSizer.Add(G2G.G2SliderWidget(voidDlg,voidPar,'drawsize',
+                                        'Brightness: ',0.001,1.0,500))
+        mainSizer.Add(G2G.G2SliderWidget(voidDlg,voidPar,'brightness',
+                                        'Brightness: ',0.1,5.0,50))
+        hSizer = wx.BoxSizer(wx.HORIZONTAL)
+        hSizer.Add(wx.StaticText(voidDlg,wx.ID_ANY,'Void map color:'))
+        cbut = csel.ColourSelect(voidDlg, wx.ID_ANY, '',
+                                     tuple(voidPar['color']),
+                                     size = wx.DefaultSize)
+        cbut.Bind(csel.EVT_COLOURSELECT, onColor)
+        hSizer.Add(cbut)
         mainSizer.Add(hSizer)
 
         def OnOK(event): voidDlg.EndModal(wx.ID_OK)
@@ -8616,6 +8403,8 @@ at one of the following locations:
         if res != wx.ID_OK: return
         drawingData['Voids'] = VoidMap(data, voidPar['a'], voidPar['b'], voidPar['c'],
             voidPar['grid'],voidPar['probe'])
+        for key in ('drawsize','brightness','color'):
+            drawingData['void'+key] = voidPar[key]
         drawingData['showVoids'] = True
         G2plt.PlotStructure(G2frame,data)
 
@@ -9723,6 +9512,23 @@ at one of the following locations:
         def ThermDataSizer(RBObj,rbType):
 
             def OnThermval(invalid,value,tc):
+                # update equivalent TL terms here
+                if 'T' in model[0]: #for 'T','TL' & 'TLS'
+                    np = tc.key
+                    #vals =  tc.result
+                    cid = CSI[0][np%6]
+                    for i,tls in enumerate(TLSobj):
+                        if i <= np:
+                            continue
+                        if np < 6 and i > 5:
+                            break
+                        if cid == CSI[0][i%6]:
+                            newValue = value*CSI[1][i%6]
+                            try:
+                                tls.ChangeValue(newValue)
+                            except TypeError:
+                                tls.ChangeValue('%.4f'%newValue)
+                            model[1][i] = value*CSI[1][i%6]
                 Cart = G2mth.UpdateRBXYZ(Bmat,RBObj,RBData,rbType)[1]
                 Uout = G2mth.UpdateRBUIJ(Bmat,Cart,RBObj)
                 cia = data['General']['AtomPtrs'][3]
@@ -9738,8 +9544,18 @@ at one of the following locations:
             def OnTLSRef(event):
                 Obj = event.GetEventObject()
                 item = Indx[Obj.GetId()]
-                RBObj['ThermalMotion'][2][item] = Obj.GetValue()
+                ref = Obj.GetValue()
+                RBObj['ThermalMotion'][2][item] = ref
+                if item < 12:
+                    csid = CSI[0][item%6]
+                    for i,csi in enumerate(CSI[0]):
+                        if csi == csid:
+                            if item < 6:
+                                RBObj['ThermalMotion'][2][i] = ref
+                            else:
+                                RBObj['ThermalMotion'][2][i+6] = ref
 
+            SGData = data['General']['SGData']
             thermSizer = wx.FlexGridSizer(0,9,5,5)
             model = RBObj['ThermalMotion']
             #patch - remove 'None' as option
@@ -9755,15 +9571,25 @@ at one of the following locations:
                 names += ['L11','L22','L33','L12','L13','L23']
             if 'S' in model[0]:
                 names += ['S12','S13','S21','S23','S31','S32','SAA','SBB']
+            Sytsym,Mult = G2spc.SytSym(RBObj['Orig'][0],SGData)[:2]
+            TLSobj = []
+            CSI = G2spc.GetCSuinel(Sytsym)
             for i,name in enumerate(names):
                 thermSizer.Add(wx.StaticText(RigidBodies,-1,name+': '),0,WACV)
-                thermVal = G2G.ValidatedTxtCtrl(RigidBodies,model[1],i,nDig=(8,4),OnLeave=OnThermval)
-                thermSizer.Add(thermVal)
-                Tcheck = wx.CheckBox(RigidBodies,-1,'Refine?')
-                Tcheck.Bind(wx.EVT_CHECKBOX,OnTLSRef)
-                Tcheck.SetValue(model[2][i])
-                Indx[Tcheck.GetId()] = i
-                thermSizer.Add(Tcheck,0,WACV)
+                if (np.any(CSI[0][i%6]) and CSI[0][i%6] not in CSI[0][:i%6]) or i > 11:
+                    thermVal = G2G.ValidatedTxtCtrl(RigidBodies,model[1],i,nDig=(8,4),OnLeave=OnThermval)
+                    thermSizer.Add(thermVal)
+                    Tcheck = wx.CheckBox(RigidBodies,-1,'Refine?')
+                    Tcheck.Bind(wx.EVT_CHECKBOX,OnTLSRef)
+                    Tcheck.SetValue(model[2][i])
+                    Indx[Tcheck.GetId()] = i
+                    thermSizer.Add(Tcheck,0,WACV)
+                else:
+                    thermVal = G2G.ReadOnlyTextCtrl(RigidBodies,value='%.4f'%(model[1][i]))
+                    model[2][i] = False         #patch to remove bad refine flags
+                    thermSizer.Add(thermVal)
+                    thermSizer.Add((5,5),0)
+                TLSobj.append(thermVal)
             return thermSizer
 
         def LocationSizer(RBObj,rbType,rbId):
@@ -9787,6 +9613,7 @@ at one of the following locations:
                 for i,Id in enumerate(RBObj['Ids']):
                     data['Atoms'][AtLookUp[Id]][cx:cx+3] = newXYZ[i]
                     data['Atoms'][AtLookUp[Id]][cx+3] = maxFrac
+                    data['Atoms'][AtLookUp[Id]][cs,cs+2] = G2spc.SytSym(newXYZ[i],SGData)[:2]
                 data['Atoms'] = G2lat.RBsymCheck(data['Atoms'],ct,cx,cs,AtLookUp,Amat,RBObj['Ids'],SGData)
                 data['Drawing']['Atoms'] = []
                 UpdateDrawAtoms(G2frame,data)
@@ -9805,6 +9632,7 @@ at one of the following locations:
                         maxFrac = max(maxFrac,data['Atoms'][AtLookUp[Id]][cx+3])
                     for i,Id in enumerate(RBObj['Ids']):
                         data['Atoms'][AtLookUp[Id]][cx:cx+3] = newXYZ[i]
+                        data['Atoms'][AtLookUp[Id]][cs:cs+2] = G2spc.SytSym(newXYZ[i],SGData)[:2]
                         if Uout[i][0] == 'I':
                             data['Atoms'][AtLookUp[Id]][cia+1] = Uout[i][1]
                         else:
@@ -9832,7 +9660,10 @@ at one of the following locations:
                 an optional keyword arg is provided with the mode to draw atoms
                 (lines, ball & sticks,...)
                 '''
-                orient = [float(Indx['Orien'][i].GetValue()) for i in range(4)]
+                try:
+                    orient = [float(Indx['Orien'][i].GetValue()) for i in range(4)]
+                except:
+                    return
                 A = orient[0]
                 V = np.inner(Amat,orient[1:]) # normalized in AVdeg2Q
                 try:
@@ -9894,6 +9725,8 @@ at one of the following locations:
                 atXYZ = Atom[cx:cx+3]
                 Sytsym,Mult = G2spc.SytSym(atXYZ,SGData)[:2]
                 Name = Atom[ct-1]
+                A,V = G2mth.Q2AVdeg(RBObj['Orient'][0])
+                ApplyAV(A,V)
             topSizer.Add(wx.StaticText(RigidBodies,-1,
                 'Rotation angle (deg)\n&& Orient. vector (frac)'),0,WACV)
             Indx['Orien'] = {}
@@ -9908,7 +9741,7 @@ at one of the following locations:
                     Ang.SetValue(0)
                     Ang.SetRange(-1,1)
                     Ang.Bind(wx.EVT_SPIN, OnAng)
-                    OrientVecSiz.append(Ang)
+#                    OrientVecSiz.append(Ang)
                     topSizer.Add(Ang,0,WACV)
                 orien = G2G.ValidatedTxtCtrl(RigidBodies,Orien,ix,nDig=(8,dp),
                     typeHint=float,OnLeave=OnOrien,xmin=xmin,xmax=xmax,size=(70,-1))
@@ -9930,18 +9763,20 @@ at one of the following locations:
             sytsymtxt = wx.StaticText(RigidBodies,label='%s site symmetry: %s, multiplicity: %d '%(Name,Sytsym,Mult))
             rbSizer.Add(topSizer)
             rbSizer.Add(sytsymtxt)
-            if rbType != 'Residue':
-                choices = [' x ',' y ',' z ','x+y','x+y+z']
-                RBObj['symAxis'] = RBObj.get('symAxis',[0,0,1])   #set default as 'z'
-                try:
-                    symax = dict(zip([str(x) for x in [[1,0,0],[0,1,0],[0,0,1],[1,1,0],[1,1,1]]],choices))[str(RBObj['symAxis'])]
-                except KeyError:
-                    symax = ' z '
+            choices = [' x ',' y ',' z ','x+y','x+y+z']
+            RBObj['symAxis'] = RBObj.get('symAxis',[0,0,1])   #set default as 'z'
+            try:
+                symax = dict(zip([str(x) for x in [[1,0,0],[0,1,0],[0,0,1],[1,1,0],[1,1,1]]],choices))[str(RBObj['symAxis'])]
+            except KeyError:
+                symax = ' z '
+            if rbType == 'Spin':
                 symRadioSet = wx.RadioBox(RigidBodies,choices=choices,label='RB polar axis is aligned along:')
                 symRadioSet.SetStringSelection(symax)
                 symRadioSet.Bind(wx.EVT_RADIOBOX, OnSymRadioSet)
                 Indx[symRadioSet.GetId()] = rbId
                 rbSizer.Add(symRadioSet)
+            else:
+                rbSizer.Add(wx.StaticText(RigidBodies,label='Rigid body symmetry axis is %s'%symax))
             return rbSizer
 
         def SpnrbSizer(RBObj,spnIndx):
@@ -10116,7 +9951,7 @@ at one of the following locations:
                         for item in RBObj['SHC'][iSh]:
                             shcSizer.Add(wx.StaticText(RigidBodies,label='%s'%item.strip('+').strip('-')))
                             shcSizer.Add(G2G.ValidatedTxtCtrl(RigidBodies,RBObj['SHC'][iSh][item],0,nDig=(8,5),
-                                typeHint=float,size=(70,-1),OnLeave=NewSHC))
+                                typeHint=float,size=(70,-1),OnLeave=NewSHC,xmin=-1.0,xmax=1.0))
                             schref = wx.CheckBox(RigidBodies,label=' refine? ')
                             schref.SetValue(RBObj['SHC'][iSh][item][2])
                             schref.Bind(wx.EVT_CHECKBOX,OnSchRef)
@@ -10275,9 +10110,9 @@ at one of the following locations:
             topLine.Add(wx.StaticText(RigidBodies,-1,
                 '   Rigid body {} axis is aligned along oriention vector'.format(lbl)),0,WACV)
             try:
-                varname = str(data['pId'])+'::RBRxxx:'+resVarLookup[resIndx]
+                varname = str(data['pId'])+'::RBRxx:'+resVarLookup[resIndx]
             except:  # happens when phase has no histograms
-                varname = '?::RBRxxx:'+resVarLookup[resIndx]
+                varname = '?::RBRxx:'+resVarLookup[resIndx]
             topLine.Add(wx.StaticText(RigidBodies,-1,
                     '  (variables '+varname+')'),0,WACV)
             resrbSizer.Add(topLine)
@@ -10404,6 +10239,41 @@ at one of the following locations:
             vecrbSizer.Add(thermSizer)
             vecrbSizer.Add(ThermDataSizer(RBObj,'Vector'))
             return vecrbSizer
+        
+        def SetTestRB(rbType,prevRBId,data):
+            
+            data['testRBObj']['rbObj'] = copy.deepcopy(data['RBModels'][rbType][prevRBId])
+            rbId = data['RBModels'][rbType][prevRBId]['RBId']
+            RBdata = G2frame.GPXtree.GetItemPyData(
+                G2gd.GetGPXtreeItemId(G2frame,G2frame.root,'Rigid bodies'))
+            data['testRBObj']['rbData'] = RBdata
+            data['testRBObj']['rbType'] = rbType
+            data['testRBObj']['rbAtTypes'] = RBdata[rbType][rbId]['rbTypes']
+            data['testRBObj']['AtInfo'] = RBData[rbType]['AtInfo']
+            data['testRBObj']['NameLookup'] = RBData[rbType][rbId].get('atNames',[])    #only for residues
+            data['testRBObj']['Sizers'] = {}
+            data['testRBObj']['rbRef'] = RBData[rbType][rbId]['rbRef']
+
+            refType = []
+            for ref in data['testRBObj']['rbRef'][:3]:
+                reftype = data['testRBObj']['rbAtTypes'][ref]
+                refType.append(reftype)
+                #refName.append(reftype+' '+str(rbRef[0]))
+            atNames = [{},{},{}]
+            AtNames = {}
+            cx,ct,cs,cia = data['General']['AtomPtrs']
+            for iatm,atom in enumerate(data['Atoms']):
+                AtNames[atom[ct-1]] = iatm
+                for i,reftype in enumerate(refType):
+                    if atom[ct] == reftype:
+                        atNames[i][atom[ct-1]] = iatm
+            data['testRBObj']['atNames'] = atNames
+            data['testRBObj']['AtNames'] = AtNames
+            data['testRBObj']['torAtms'] = []
+            # unclear why these torsion entries are being added to rbObj.
+            for item in RBData[rbType][rbId].get('rbSeq',[]):
+                data['testRBObj']['rbObj']['Torsions'].append([item[2],False])  # Needed?
+                data['testRBObj']['torAtms'].append([-1,-1,-1])
 
         def OnVecSelect(event):
             global prevVecId
@@ -10416,6 +10286,9 @@ at one of the following locations:
                 spnSelect.Deselect(spnSelect.GetSelection())
             except:
                 pass
+            data['testRBObj'] = {}
+            rbType = 'Vector'
+            SetTestRB(rbType,prevVecId,data)
             wx.CallLater(100,RepaintRBInfo,'Vector',prevVecId)
 
         def OnResSelect(event):
@@ -10429,9 +10302,10 @@ at one of the following locations:
                 spnSelect.Deselect(spnSelect.GetSelection())
             except:
                 pass
-            # # define the parameters needed to drag the RB with the mouse
-            # data['testRBObj'] = {}
-            # rbType = 'Residue'
+            # define the parameters needed to drag the RB with the mouse
+            data['testRBObj'] = {}
+            rbType = 'Residue'
+            SetTestRB(rbType,prevResId,data)
             # data['testRBObj']['rbObj'] = copy.deepcopy(data['RBModels'][rbType][prevResId])
             # rbId = data['RBModels'][rbType][prevResId]['RBId']
             # RBdata = G2frame.GPXtree.GetItemPyData(
@@ -10468,6 +10342,7 @@ at one of the following locations:
 
         def OnSpnSelect(event):
             global prevSpnId
+            data['testRBObj'] = {}
             prevSpnId = spnSelect.GetSelection()
             try:
                 resSelect.Deselect(resSelect.GetSelection())
@@ -10482,10 +10357,7 @@ at one of the following locations:
         def RepaintRBInfo(rbType,rbIndx,Scroll=0):
             oldFocus = wx.Window.FindFocus()
             try:
-                if 'phoenix' in wx.version():
-                    G2frame.bottomSizer.Clear(True)
-                else:
-                    G2frame.bottomSizer.DeleteWindows()
+                G2frame.bottomSizer.Clear(True)
             except:
                 return
             Indx.clear()
@@ -10501,7 +10373,7 @@ at one of the following locations:
             elif rbType == 'Spin':
                 text = ''
                 for ish,pMax in enumerate(rbObj.get('Pmax',[])):
-                    text += 'Shell %d: Pmax %.3f Pmin %.3f '%(ish,pMax,rbObj['Pmin'][ish])
+                    text += ('Shell %d: 4'+chr(0x03c0)+'*Pmax=%.3f, 4'+chr(0x03c0)+'*Pmin=%.3f ')%(ish,forpi*pMax,forpi*rbObj['Pmin'][ish])
                 G2frame.GetStatusBar().SetStatusText(text,1)
                 G2frame.selectRB = {item:rbObj[item] for item in ['Orient','symAxis','showAxes']}
                 G2frame.selectRB['Orig'] = [data['Atoms'][AtLookUp[rbObj['Ids'][0]]][cx:cx+3],False]
@@ -10510,6 +10382,8 @@ at one of the following locations:
             else: #Vector
                 G2frame.GetStatusBar().SetStatusText('Alt RB: drag RB, ALT MB: Z rotate RB, ALT LB: Q rotate RB',1)
                 data['Drawing']['viewPoint'][0] = rbObj['Orig'][0]
+                #patch
+                rbObj['symAxis'] = rbObj.get('symAxis',[0,0,1])
                 G2frame.selectRB = {item:rbObj[item] for item in ['Orig','Orient','symAxis','showAxes']}
                 G2frame.bottomSizer =  VecrbSizer(rbObj,rbIndx)
             mainSizer.Add(G2frame.bottomSizer)
@@ -10566,6 +10440,7 @@ at one of the following locations:
                 # patch
                 if 'AtomFrac' not in RBObj:
                     RBObj['AtomFrac'] = [1.0,False]
+                RBObj['fixOrig'] = False
                 #end patch
                 name = RBObj['RBname']+RBObj['numChain']
                 RBnames.append(name)
@@ -10597,6 +10472,7 @@ at one of the following locations:
                 # patch
                 if 'AtomFrac' not in RBObj:
                     RBObj['AtomFrac'] = [1.0,False]
+                RBObj['fixOrig'] = False
                 #end patch
                 RBnames.append(RBObj['RBname'])
             vecId = -1
@@ -10642,6 +10518,8 @@ at one of the following locations:
             spnSelect.Bind(wx.EVT_LISTBOX,OnSpnSelect)
             spnSizer.Add(spnSelect,0)
             rbSizer.Add(spnSizer)
+            data['Drawing']['Atoms'] = []
+            UpdateDrawAtoms(G2frame,data)
         try:
             rbObj['showAxes'] = rbObj.get('showAxes',False)
             G2frame.selectRB = {item:rbObj[item] for item in ['Orig','Orient','OrientVec','symAxis','showAxes']}
@@ -10949,7 +10827,7 @@ at one of the following locations:
                 for i in range(4):
                     val = rbObj['OrientVec'][i]
                     if not i:    #in that BoxSizer from G2SpinWidget
-                        BSI = G2frame.testRBObjSizers['OrientVecSiz'][i].GetChildren()[-2].GetWindow()
+                        BSI = G2frame.testRBObjSizers['OrientVecSiz'][i]    #.GetChildren()[-2].GetWindow()
                     else:
                         BSI = G2frame.testRBObjSizers['OrientVecSiz'][i]
                     BSI.ChangeValue(val)
@@ -10968,8 +10846,11 @@ at one of the following locations:
                     np.inner(Amat,rbObj['OrientVec'][1:]))
                 rbObj['Orient'][0] = Q
                 azSlide.SetValue(int(10*rbObj['OrientVec'][0]))
-                # G2frame.testRBObjSizers['OrientVecSiz'][4].ChangeValue(
-                #     int(10*rbObj['OrientVec'][0]))
+                try:
+                    G2frame.testRBObjSizers['OrientVecSiz'][4].ChangeValue(
+                        int(10*rbObj['OrientVec'][0]))
+                except:
+                    pass
                 G2plt.PlotStructure(G2frame,data,False,UpdateTable)
                 UpdateTable()
 
@@ -11017,9 +10898,10 @@ at one of the following locations:
                     return {}
                 return selDict
 
-            def getDeltaXYZ(selDict,data,rbObj):
+            def getDeltaXYZ(selDict,data,rbObj,ortho=True):
                 '''Evaluate the RB position & return the difference between the coordinates
-                and RB coordinates with origin and orientation from data['testRBObj']
+                and RB coordinates using origin and orientation from data['testRBObj'].
+                returns orthogonal coordinates unless ortho=False
                 '''
                 Amat,Bmat = G2lat.cell2AB(data['General']['Cell'][1:7])
                 rbXYZ = G2mth.UpdateRBXYZ(Bmat,rbObj,data['testRBObj']['rbData'],data['testRBObj']['rbType'])[0]
@@ -11027,25 +10909,49 @@ at one of the following locations:
                 deltaList = []
                 for i in selDict:
                     if selDict[i] is None: continue
-                    deltaList.append(phaseXYZ[selDict[i]]-rbXYZ[i])
+                    XYZf = phaseXYZ[selDict[i]]-rbXYZ[i] # fractional 
+                    if ortho:
+                        XYZo = np.inner(Amat,XYZf) # orthogonal
+                        deltaList.append(XYZo)
+                    else:
+                        deltaList.append(XYZf)
                 return np.array(deltaList)
 
             def objectiveDeltaPos(vals,selDict,data,rbObj_in):
                 '''Objective function for minimization.
                 Returns a list of distances between atom positions and
-                located rigid body positions
+                located rigid body positions. Generates the 4th quaterian from 
+                the 1st three. 
 
-                :param list vals: a 4 or 7 element array with 4 quaterian values
-                   or 4 quaterian values followed by 3 origin (x,y,z) values
+                :param list vals: a 3 or 6 element array with 3 (of 4) 
+                  quaterian values or 3 quaterian values followed by 3 
+                  origin (x,y,z) values
 
-                :returns: the 3*n distances between the n selected atoms
+                :returns: the 3*n distances between the n selected atoms 
+                  in orthogonal coordinates
                 '''
                 rbObj = copy.deepcopy(rbObj_in)
-                rbObj['Orient'][0][:] = G2mth.normQ(vals[:4])
-                if len(vals) == 7:
-                    rbObj['Orig'][0][:] = vals[4:]
-                #print(np.sqrt(sum(getDeltaXYZ(selDict,data,rbObj).flatten()**2)))
+                rbObj['Orient'][0][:] = quat3to4(vals[:3])
+                if len(vals) == 6:
+                    rbObj['Orig'][0][:] = vals[3:]
+                elif len(vals) != 3:
+                    raise Exception('Wrong use of objectiveDeltaPos')
                 return getDeltaXYZ(selDict,data,rbObj).flatten()
+
+            def quat3to4(vals):
+                '''Derive the 4th value for a quaternion from the 1st three
+                making sure to use normalization etc. 
+                
+                :param list vals: a 3 element list or array with the 1st 
+                  three quaterion terms
+                :returns: a normalized 4 term quaterion
+                '''
+                s = sum(np.array(vals)**2)
+                if s < 1:
+                    q4 = np.sqrt(1 - s)
+                else:
+                    q4 = 0.
+                return G2mth.normQ(np.append(vals,q4))
 
             def onSetOrigin(event):
                 'Set Origin to best fit selected atoms'
@@ -11058,7 +10964,7 @@ at one of the following locations:
                     wx.MessageBox('No existing atoms were selected',caption='Select Atom(s)',
                                       style=wx.ICON_EXCLAMATION)
                     return
-                deltaList = getDeltaXYZ(selDict,data,rbObj)
+                deltaList = getDeltaXYZ(selDict,data,rbObj,ortho=False)
                 data['testRBObj']['rbObj']['Orig'][0] += deltaList.sum(axis=0)/len(deltaList)
                 for i,item in enumerate(Xsizers):
 #                    item.SetValue(data['testRBObj']['rbObj']['Orig'][0][i])
@@ -11069,12 +10975,12 @@ at one of the following locations:
                 'Set Orientation to best fit selected atoms'
                 selDict = getSelectedAtoms()
                 if len(selDict) < 2:
-                    wx.MessageBox('At least two existing atoms must be selected',caption='Select Atoms',
+                    wx.MessageBox('At least two RB atoms must be assigned',caption='Assign Atoms',
                                       style=wx.ICON_EXCLAMATION)
                     return
-                vals = rbObj['Orient'][0][:] #+ rbObj['Orig'][0][:]
+                vals = rbObj['Orient'][0][:3] #+ rbObj['Orig'][0][:]
                 out = so.leastsq(objectiveDeltaPos,vals,(selDict,data,rbObj))
-                data['testRBObj']['rbObj']['Orient'][0][:] = G2mth.normQ(out[0])
+                data['testRBObj']['rbObj']['Orient'][0][:] = quat3to4(out[0])
                 updateAddRBorientText(G2frame,data['testRBObj'],Bmat)
                 UpdateTablePlot()
 
@@ -11086,13 +10992,13 @@ at one of the following locations:
                     return
                 selDict = getSelectedAtoms()
                 if len(selDict) < 3:
-                    wx.MessageBox('At least three existing atoms must be selected',caption='Select Atoms',
+                    wx.MessageBox('At least three RB atoms must be assigned',caption='Assign Atoms',
                                       style=wx.ICON_EXCLAMATION)
                     return
-                vals = np.concatenate((rbObj['Orient'][0], rbObj['Orig'][0]))
+                vals = np.concatenate((rbObj['Orient'][0][:3], rbObj['Orig'][0]))
                 out = so.leastsq(objectiveDeltaPos,vals,(selDict,data,rbObj))
-                data['testRBObj']['rbObj']['Orig'][0][:] = out[0][4:]
-                data['testRBObj']['rbObj']['Orient'][0][:] = G2mth.normQ(out[0][:4])
+                data['testRBObj']['rbObj']['Orig'][0][:] = out[0][3:]
+                data['testRBObj']['rbObj']['Orient'][0][:] = quat3to4(out[0][:3])
                 for i,item in enumerate(Xsizers):
 #                    item.SetValue(data['testRBObj']['rbObj']['Orig'][0][i])
                     item.ChangeValue(data['testRBObj']['rbObj']['Orig'][0][i])
@@ -11263,10 +11169,7 @@ of the crystal structure.
                     xmin=-1.5,xmax=1.5,typeHint=float,OnLeave=UpdateSytSym)
                 OriSizer.Add(origX,0,WACV)
                 Xsizers.append(origX)
-            try:
-                rbObj['fixOrig']
-            except:
-                rbObj['fixOrig'] = False
+            rbObj['fixOrig'] = rbObj.get('fixOrig',False)
             if rbType != 'Spin':
                 fixOrig = G2G.G2CheckBox(RigidBodies,'Lock',rbObj,'fixOrig')
                 OriSizer.Add(fixOrig,0,WACV,10)
@@ -11290,18 +11193,15 @@ of the crystal structure.
                 if 'OrientVec' not in rbObj: rbObj['OrientVec'] = [180.,0.,0.,1.]
                 rbObj['OrientVec'][0],V = G2mth.Q2AVdeg(rbObj['Orient'][0])
                 rbObj['OrientVec'][1:] = np.inner(Bmat,V)
-                # OriSizer2.Add(wx.StaticText(RigidBodies,label='Orientation azimuth: '),0,WACV)
                 OrientVecSiz = []
-                # OrientVecSiz.append(G2G.ValidatedTxtCtrl(RigidBodies,rbObj['OrientVec'],0,nDig=(10,2),
-                #     xmin=0.,xmax=360.,typeHint=float,OnLeave=UpdateOrientation))
-                Orientvec = G2G.G2SpinWidget(RigidBodies,rbObj['OrientVec'],0,nDig=(10,2),typeHint=float,
+                Orientvec,orientVal = G2G.G2SpinWidget(RigidBodies,rbObj['OrientVec'],0,nDig=(10,2),typeHint=float,
                     label='Orientation azimuth: ',xmin=0.,xmax=360.,onChange=UpdateOrientation)
-                OrientVecSiz.append(Orientvec)
-                OriSizer2.Add(OrientVecSiz[-1],0,WACV)
+                OrientVecSiz.append(orientVal)
+                OriSizer2.Add(Orientvec,0,WACV)
                 azSlide = G2G.G2Slider(RigidBodies,style=wx.SL_HORIZONTAL,size=(200,25),
                     minValue=0,maxValue=3600,value=int(10*rbObj['OrientVec'][0]))
                 azSlide.Bind(wx.EVT_SLIDER, OnAzSlide)
-                OriSizer2.Add(azSlide,0,WACV)
+                OriSizer2.Add(azSlide)
                 mainSizer.Add(OriSizer2)
                 OriSizer3 = wx.BoxSizer(wx.HORIZONTAL)
                 OriSizer3.Add(wx.StaticText(RigidBodies,label='Orientation vector'),0,WACV)
@@ -11324,7 +11224,7 @@ of the crystal structure.
                     symRadioSet.Bind(wx.EVT_RADIOBOX, OnSymRadioSet)
                     OriSizer4.Add(symRadioSet)
                 else:
-                    OriSizer4.Add(wx.StaticText(RigidBodies,label='Rigid body symmetry axis is z'),0, WACV)
+                    OriSizer4.Add(wx.StaticText(RigidBodies,label='Rigid body symmetry axis is z; '),0, WACV)
                 Invert = G2G.G2CheckBox(RigidBodies,'Invert',rbObj,'Invert',OnInvert)
                 OriSizer4.Add(Invert,0,WACV)
                 mainSizer.Add(OriSizer4)
@@ -12105,10 +12005,7 @@ of the crystal structure.
 
         def RepaintRBInfo(rbId,Scroll=0):
             oldFocus = wx.Window.FindFocus()
-            if 'phoenix' in wx.version():
-                G2frame.bottomSizer.Clear(True)
-            else:
-                G2frame.bottomSizer.DeleteWindows()
+            G2frame.bottomSizer.Clear(True)
             Indx.clear()
             rbObj = data['MCSA']['Models'][rbId]
             G2frame.bottomSizer.Insert(0,rbSizer(rbObj))
@@ -13872,79 +13769,6 @@ def CheckAddHKLF(G2frame,data):
     wx.EndBusyCursor()
     return result
 
-def checkPDFfit(G2frame):
-    '''Checks to see if PDFfit2 is available and can be imported. PDFfit2 can be installed
-    in a separate Python interpreter (saved in the pdffit2_exec config variable). If this is
-    defined, no attempt is made to check that it actually runs.
-    Otherwise, if diffpy.PDFfit has been installed with conda/pip, it is checked if the
-    install command.
-
-    :returns: False if PDFfit2 cannot be run/accessed. True if it appears it can be run.
-    '''
-    # if a separate Python interpreter has been specified, just use it, no checking
-    if GSASIIpath.GetConfigValue('pdffit2_exec') is not None and is_exe(
-            GSASIIpath.GetConfigValue('pdffit2_exec')):
-        return True
-
-    # see if diffpy has been installed directly
-    try:
-        from diffpy.pdffit2 import PdfFit
-        PdfFit
-        return True
-    except:
-        pass
-
-    # Last effort: With conda we should be able to create a separate
-    # Python in a separate environment
-    try:     # have conda. Can we access it programmatically?
-        import conda.cli.python_api
-        conda.cli.python_api
-    except:
-        G2G.G2MessageBox(G2frame,'You are running a directly installed Python. You will need to install PDFfit2 directly as well, preferably in a separate virtual environment.')
-        return
-
-    msg = ('Do you want to use conda to install PDFfit2 into a separate environment? '+
-               '\n\nIf successful, the pdffit2_exec configuration option will be set to the '+
-               'this new Python environment.')
-    dlg = wx.MessageDialog(G2frame,msg,caption='Install?',
-                                   style=wx.YES_NO|wx.ICON_QUESTION)
-    if dlg.ShowModal() != wx.ID_YES:
-        return False
-    try:
-        wx.BeginBusyCursor()
-        print('Preparing to create a conda environment. This may take a few minutes...')
-        # for now use the older diffpy version of pdffit:
-        #   conda create -n pdffit2 python=3.7 conda gsl diffpy.pdffit2=1.3.4 -c conda-forge -c diffpy
-        res,PDFpython = GSASIIpath.condaEnvCreate('pdffit2',
-                    ['python', 'conda', 'gsl', 'diffpy.pdffit2>=1.4.3',
-                         '-c', 'conda-forge']) #  not needed , '-c', 'diffpy'])
-    finally:
-        wx.EndBusyCursor()
-    if os.path.exists(PDFpython) and is_exe(PDFpython):
-        vars = G2G.GetConfigValsDocs()
-        vars['pdffit2_exec'][1] = PDFpython
-        GSASIIpath.SetConfigValue(vars)
-        G2G.SaveConfigVars(vars)
-        print('pdffit2_exec config set with ',GSASIIpath.GetConfigValue('pdffit2_exec'))
-        print('\n\nSuccess: PDFfit2 installed.')
-        return True
-    else:
-        print(f'Failed to install PDFfit2 with error:\n{PDFpython}')
-        if ('PackagesNotFoundError' in PDFpython
-                and 'darwin' in sys.platform
-                and 'arm' in platform.machine()):
-            msg = ('It appears that PDFfit2 is not yet available as a conda package for Macs with arm processors. '+
-                       '\n\nYou could install PDFfit2 with x86 Python and use that '+
-                       'in compatibility mode.')
-        else:
-            msg = ('An attempt to install PDFfit2 has failed. '+
-                       'Do you have write access to where GSAS-II is installed? '+
-                       'You may be able to install PDFfit2 manually.')
-        msg += '\n\nIf you install PDFfit2 yourself, set the pdffit2_exec config variable to the install location'
-        G2G.G2MessageBox(G2frame,
-                'PDFfit2 Install failed. See console for error message\n\n'+msg,
-                'PDFfit2 install error')
-        return False
 
 def makeIsoNewPhase(phData,cell,atomList,sglbl,sgnum):
     '''create a new phase from a supergroup structure generated by ISOCIF

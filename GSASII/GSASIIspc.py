@@ -2175,7 +2175,8 @@ def GenAtom(XYZ,SGData,All=False,Uij=[],Move=True):
     '''
     Generates the equivalent positions for a specified coordinate and space group
 
-    :param XYZ: an array, tuple or list containing 3 elements: x, y & z
+
+    :param XYZ: an array, tuple or list containing 3 elements for a single atom: x, y & z
     :param SGData: from :func:`SpcGroup`
     :param All: True return all equivalent positions including duplicates;
       False return only unique positions
@@ -2192,6 +2193,12 @@ def GenAtom(XYZ,SGData,All=False,Uij=[],Move=True):
       * +1/-1 for spin inversion of operator - empty if not magnetic
 
     '''
+    def fixtrighex(X):
+        IXY = np.array([np.rint(x*3.) for x in X[:2]])
+        if str(IXY) in ['[1. 2.]','[2. 1.]'] and np.allclose(IXY/3.,X[:2],atol=2.e-4):
+            X[:2] = IXY/3.
+        return X
+              
     XYZEquiv = []
     UijEquiv = []
     Idup = []
@@ -2203,6 +2210,9 @@ def GenAtom(XYZ,SGData,All=False,Uij=[],Move=True):
     SpnFlp = SGData.get('SpnFlp',[])
     spnflp = []
     X = np.array(XYZ)
+    if SGData['SGLaue'][0] in ['3','6']:
+        X = fixtrighex(X)
+        XYZ = X
     mj = 0
     for ic,cen in enumerate(icen):
         C = np.array(cen)
@@ -2223,10 +2233,10 @@ def GenAtom(XYZ,SGData,All=False,Uij=[],Move=True):
                 else:
                     newX = XT
                 if All:
-                    if np.allclose(newX,X,atol=0.0002):     #do we want %1. here?
+                    if np.allclose(newX,X,atol=2.e-4):
                         idup = False
                 else:
-                    if True in [np.allclose(newX%1.,oldX%1.,atol=0.0002) for oldX in XYZEquiv]:
+                    if True in [np.allclose(newX%1.,oldX%1.,atol=2.e-4) for oldX in XYZEquiv]:
                         idup = False
                 if All or idup:
                     XYZEquiv.append(newX)
@@ -3999,8 +4009,10 @@ def CompareSym(symList,sgName=None,SGData=None):
       even -X+0.5 can all be accepted. This is typically read from a CIF.
     :param str sgName: a space group name. Need not follow GSAS-II
       convention for spaces, etc (see :func:`GSASIIspc.StandardizeSpcName`)
-    :param SGData: a GSAS-II symmetry objectspace group name. Need not follow GSAS-II
-      convention for spaces, etc (see :func:`GSASIIspc.StandardizeSpcName`)
+    :param SGData: a GSAS-II symmetry object from a space group name. Used
+      if sgName is left as None.
+    
+    :returns: True if the symmetry operators match
     '''
     if sgName:
         sgName = StandardizeSpcName(sgName) # Deal with non-standard spaces in name
@@ -4010,6 +4022,9 @@ def CompareSym(symList,sgName=None,SGData=None):
         matList = AllOps(SGData)[2]
     else:
         raise Exception('CompareSym called without symmetry input')
+    if len(matList) != len(symList): 
+        print(f"Numbers of symmetry elements from input ({len(symList)}) does not match GSAS-II's list ({len(matList)})")
+        return False
 
     for sym in symList:
         try:

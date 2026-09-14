@@ -1318,8 +1318,9 @@ def mkParmDictfromTree(G2frame,sigDict=None):
     covDict = {}
     consDict = {}
 
-    Histograms,Phases = G2frame.GetUsedHistogramsAndPhasesfromTree()
     if G2frame.GPXtree.IsEmpty(): return # nothing to do
+    Histograms,Phases = G2frame.GetUsedHistogramsAndPhasesfromTree()
+    if not Phases or not Histograms: return # nothing to do
     rigidbodyDict = G2frame.GPXtree.GetItemPyData(
             G2gd.GetGPXtreeItemId(G2frame,G2frame.root,'Rigid bodies'))
     covDict = G2frame.GPXtree.GetItemPyData(
@@ -1352,6 +1353,9 @@ def mkParmDictfromTree(G2frame,sigDict=None):
         if item.startswith('_'): continue
         constList += consDict[item]
     G2mv.InitVars()     # process constraints
+    d = {str(k):v for k,v in zip(consDict.get('_OffsetKeys',[]),
+                                 consDict.get('_OffsetVals',[]))}
+    G2mv.ProcessOffsets(d)
     constrDict,fixedList,ignored = G2mv.ProcessConstraints(constList)
     varyList = list(covDict.get('varyListStart',[]))
     if varyList is None and len(constrDict) == 0:

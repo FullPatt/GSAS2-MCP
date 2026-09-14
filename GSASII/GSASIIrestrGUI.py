@@ -928,8 +928,9 @@ def UpdateRestraints(G2frame,data,phaseName):
             restData['Use'] = Obj.GetValue()
 
         wtBox = wx.BoxSizer(wx.HORIZONTAL)
+        restData['wtFactor'] = float(restData['wtFactor'])
         wtBox.Add(wx.StaticText(wind,-1,'Phase '+phaseName+' Restraint weight factor: '),0,WACV)
-        wtfactor = G2G.ValidatedTxtCtrl(wind,restData,'wtFactor',nDig=(10,2,'g'),typeHint=float)
+        wtfactor = G2G.ValidatedTxtCtrl(wind,restData,'wtFactor',nDig=(12,4,'f'),typeHint=float)
         wtBox.Add(wtfactor,0,WACV)
         useData = wx.CheckBox(wind,-1,label=' Use?')
         useData.Bind(wx.EVT_CHECKBOX, OnUseData)
@@ -2157,14 +2158,11 @@ def UpdateRestraints(G2frame,data,phaseName):
         if len(spinRestData['SpinRBs']):
             table = []
             rowLabels = []
-            # Types = [wg.GRID_VALUE_STRING,wg.GRID_VALUE_FLOAT+':10,2',
-            #     wg.GRID_VALUE_BOOL,wg.GRID_VALUE_FLOAT+':10,2']
-            # colLabels = ['atom','neg esd','use unit?','unit esd']
-            # for i,[atomid,esd1,ifesd2,esd2] in enumerate(spinRestData['SpinRBs']):
-            #     table.append(['%s'%G2mth.GetAtomItemsById(Atoms,AtLookUp,atomid,ct-1)[0],esd1,ifesd2,esd2])
-            #     rowLabels.append(str(i))
             Types = [wg.GRID_VALUE_STRING,wg.GRID_VALUE_FLOAT+':10,2']
             colLabels = ['atom','neg esd']
+            for i,item in enumerate(spinRestData['SpinRBs']):
+                if item[0] not in AtLookUp:
+                    del spinRestData['SpinRBs'][i]
             for i,[atomid,esd1,ifesd2,esd2] in enumerate(spinRestData['SpinRBs']):
                 table.append(['%s'%G2mth.GetAtomItemsById(Atoms,AtLookUp,atomid,ct-1)[0],esd1])
                 rowLabels.append(str(i))
@@ -2174,11 +2172,7 @@ def UpdateRestraints(G2frame,data,phaseName):
             SpinRBs.AutoSizeColumns(False)
             for r in range(len(spinRestData['SpinRBs'])):
                 SpinRBs.SetReadOnly(r,0,True)
-                SpinRBs.SetCellStyle(r,0,VERY_LIGHT_GREY,True)                # if not spinRBTable.GetValue(r,2):
-                #     SpinRBs.SetReadOnly(r,3,True)
-                #     SpinRBs.SetCellStyle(r,3,VERY_LIGHT_GREY,True)
-                #     SpinRBs.SetCellTextColour(r,3,VERY_LIGHT_GREY)
-
+                SpinRBs.SetCellStyle(r,0,VERY_LIGHT_GREY,True)
             SpinRBs.Bind(wg.EVT_GRID_LABEL_LEFT_CLICK,OnRowSelect)
             SpinRBs.Bind(wg.EVT_GRID_CELL_CHANGED, OnCellChange)
             G2frame.dataWindow.RestraintEdit.Enable(id=G2G.wxID_RESTDELETE,enable=True)

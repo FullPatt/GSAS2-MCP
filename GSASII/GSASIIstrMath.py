@@ -791,7 +791,7 @@ def penaltyFxn(HistoPhases,calcControls,parmDict,varyList):
                                             else:
                                                 pVals.append(0.0)
                                                 pWt.append(0.0)
-                                        pWnum[name] += ma.count(ma.masked_greater(SH,0.0))
+                                            pWnum[name] += 1
 
                     elif name == 'Texture':
                         SHkeys = list(textureData['SH Coeff'][1].keys())
@@ -1013,7 +1013,7 @@ def penaltyDeriv(pNames,pVal,HistoPhases,calcControls,parmDict,varyList):
                                     iRb = SRBIds.index(RBObj['RBId'][ish])
                                     for item in RBObj['SHC'][ish]:
                                         dNames += ['%d::RBSSh;%d;%s:%d:%d'%(pId,ish,item,AtLookup[iAt],iRb)]
-                                        deriv.append(G2lat.KslCalc(item,PSI,GAM))
+                                        deriv.append(G2lat.KslCalc(item,PSI,GAM)/(4.0*np.pi))
                         
                     elif name == 'General':
                         eq,obs,esd = itemRest[name][Id]
@@ -5211,6 +5211,8 @@ def errRefine(values,HistoPhases,parmDict,histDict1,varylist,calcControls,pawley
         GoOn = dlg.Update(int(100.*pSum/np.sum(M**2)),newmsg='Restraints')
     Histograms['RestraintSum'] = pSum
     Histograms['RestraintTerms'] = len(pVals)
+    Histograms['Restraints'] = pWsum
+    Histograms['nRestraints'] = pWnum
     return M
 
 def calcMassFracs(varyList,covMatrix,Phases,hist,hId):

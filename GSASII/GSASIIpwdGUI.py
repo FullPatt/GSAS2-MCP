@@ -1560,11 +1560,11 @@ def UpdatePeakGrid(G2frame, data):
         cRef = G2G.G2CheckBox(G2frame.dataWindow,'ref',data['LaueFringe'],'clat-ref')
         prmSizer.Add(cRef,0,WACV)
         prmSizer.Add((15,-1))
-        siz = G2G.G2SpinWidget(G2frame.dataWindow,data['LaueFringe'] ,'lmin','l min')
+        siz = G2G.G2SpinWidget(G2frame.dataWindow,data['LaueFringe'] ,'lmin','l min')[0]
         prmSizer.Add(siz,0,WACV)
         prmSizer.Add((15,-1))
         siz = G2G.G2SpinWidget(G2frame.dataWindow,data['LaueFringe'] ,'ncell','Laue ncell',
-            onChange=RefreshPeakGrid,onChangeArgs=[None])
+            onChange=RefreshPeakGrid,onChangeArgs=[None])[0]
         prmSizer.Add(siz,0,WACV)
         # prmSizer.Add((15,-1))
         # prmSizer.Add(wx.StaticText(G2frame.dataWindow,label='  Show '),0,WACV)
@@ -2639,9 +2639,9 @@ def UpdateInstrumentGrid(G2frame,data):
                 binwid = cw[np.searchsorted(xye[0],peak[0])]
                 if const:
                     if 'Debye' in Sample['Type']:
-                        shft -= const*(Sample['DisplaceX'][0]*npcosd(calcPos)+Sample['DisplaceY'][0]*npsind(calcPos))
+                        shft -= const*(Sample['DisplaceX'][0]*npcosd(calcPos)+Sample['DisplaceY'][0]*npsind(calcPos))-data['Zero'][1]
                     else:
-                        shft -= 2.0*const*Sample['Shift'][0]*npcosd(calcPos/2.0)
+                        shft -= 2.0*const*Sample['Shift'][0]*npcosd(calcPos/2.0)-data['Zero'][1]
                 XY.append([peak[-1],peak[0]-shft,binwid])
                 Sigs.append(IndexPeaks[1][ip])
         if len(XY):
@@ -7530,7 +7530,7 @@ def UpdateReflectionGrid(G2frame,data,HKLF=False,Name=''):
                 if phaseId:         #is phase deleted?
                     General = G2frame.GPXtree.GetItemPyData(phaseId)['General']
                     G,g = G2lat.cell2Gmat(General['Cell'][1:7])
-                    GA,GB = G2lat.Gmat2AB(G)    #Orthogonalization matricies
+                    GA,GB = G2lat.Gmat2AB(G)    #Orthogonalization matrices
                     SGData = General['SGData']
                     if General.get('Modulated',False):
                         Super = 1

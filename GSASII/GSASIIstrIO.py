@@ -149,6 +149,9 @@ def ReadConstraints(GPXfile, seqHist=None):
     for item in ConstraintsItem[1]:
         if item.startswith('_'): continue
         constList += ConstraintsItem[1][item]
+    d = {str(k):v for k,v in zip(ConstraintsItem[1].get('_OffsetKeys',[]),
+                                 ConstraintsItem[1].get('_OffsetVals',[]))}
+    G2mv.ProcessOffsets(d)
     constrDict,fixedList,ignored = G2mv.ProcessConstraints(constList,seqmode,seqHist)
     #if ignored:
     #    G2fil.G2Print ('Warning: {} Constraints were rejected. Was a constrained phase, histogram or atom deleted?'.format(ignored))
@@ -1056,7 +1059,6 @@ def GetRigidBodyModels(rigidbodyDict,Print=True,pFile=None):
             pFile.write(i)
         pFile.write('Orientation defined by: atom %s -> atom %s & atom %s -> atom %s\n'%
             (RBModel['rbRef'][0],RBModel['rbRef'][1],RBModel['rbRef'][0],RBModel['rbRef'][2]))
-
     if Print and pFile is None: raise Exception("specify pFile or Print=False")
     rbVary = []
     rbDict = {}
@@ -1556,22 +1558,52 @@ def GetPhaseData(PhaseData,RestraintDict={},rbIds={},Print=True,pFile=None,
 
     def MakeRBThermals(rbKey,phaseVary,phaseDict):
         rbid = str(rbids.index(RB['RBId']))
+        SytSym = RB['SytSym']
+        CSI = G2spc.GetCSuinel(SytSym)
         tlstr = ['11','22','33','12','13','23']
         sstr = ['12','13','21','23','31','32','AA','BB']
         if 'T' in RB['ThermalMotion'][0]:
+            names = []
             pfxRB = pfx+'RB'+rbKey+'T'
             for i in range(6):
                 name = pfxRB+tlstr[i]+':'+str(iRB)+':'+rbid
+                names.append(name)
                 phaseDict[name] = RB['ThermalMotion'][1][i]
                 if RB['ThermalMotion'][2][i]:
                     phaseVary += [name,]
+            equivs = {1:[],2:[],3:[],4:[],5:[],6:[]}
+            for j in range(6):
+                if CSI[0][j] > 0:
+                    if names[j] not in phaseVary: phaseVary.append(names[j])
+                    equivs[CSI[0][j]].append([names[j],CSI[1][j]])
+            for equiv in equivs:
+                if len(equivs[equiv]) > 1:
+                    name = equivs[equiv][0][0]
+                    coef = equivs[equiv][0][1]
+                    for eqv in equivs[equiv][1:]:
+                        eqv[1] /= coef
+                        G2mv.StoreEquivalence(name,(eqv,))
         if 'L' in RB['ThermalMotion'][0]:
+            names = []
             pfxRB = pfx+'RB'+rbKey+'L'
             for i in range(6):
                 name = pfxRB+tlstr[i]+':'+str(iRB)+':'+rbid
+                names.append(name)
                 phaseDict[name] = RB['ThermalMotion'][1][i+6]
                 if RB['ThermalMotion'][2][i+6]:
                     phaseVary += [name,]
+            equivs = {1:[],2:[],3:[],4:[],5:[],6:[]}
+            for j in range(6):
+                if CSI[0][j] > 0:
+                    if names[j] not in phaseVary: phaseVary.append(names[j])
+                    equivs[CSI[0][j]].append([names[j],CSI[1][j]])
+            for equiv in equivs:
+                if len(equivs[equiv]) > 1:
+                    name = equivs[equiv][0][0]
+                    coef = equivs[equiv][0][1]
+                    for eqv in equivs[equiv][1:]:
+                        eqv[1] /= coef
+                        G2mv.StoreEquivalence(name,(eqv,))
         if 'S' in RB['ThermalMotion'][0]:
             pfxRB = pfx+'RB'+rbKey+'S'
             for i in range(8):
@@ -1597,6 +1629,8 @@ def GetPhaseData(PhaseData,RestraintDict={},rbIds={},Print=True,pFile=None,
     def MakeRBSphHarm(rbKey,phaseVary,phaseDict):
         iAt = str(atomIndx[RB['Ids'][0]][1])  #for spin RBs
         for ish,Shcof in enumerate(RB['SHC']):
+            if not len(Shcof):
+                continue
             rbid = str(rbids.index(RB['RBId'][ish]))
             if 'Q' not in RB['atType']:
                 name = '%sRBSSh;%d;Radius:%s:%s'%(pfx,ish,iAt,rbid)
@@ -1837,7 +1871,7 @@ def GetPhaseData(PhaseData,RestraintDict={},rbIds={},Print=True,pFile=None,
                                     pfx+'U12cos:'+stiw,pfx+'U13cos:'+stiw,pfx+'U23cos:'+stiw]
                                 equivs = {1:[],2:[],3:[],4:[],5:[],6:[], 7:[],8:[],9:[],10:[],11:[],12:[]}
                             elif Stype == 'Sfrac':
-                                equivs = {1:[],2:[]}
+                                equivs = {}
                                 if 'Crenel' in waveType and not iw:
                                     names = [pfx+'Fzero:'+stiw,pfx+'Fwid:'+stiw]
                                 else:

@@ -433,10 +433,17 @@ def downloadFile(URL,download_loc=None):
     return filename
 
 def import_generic(filename, readerlist, fmthint=None, bank=None,
-                       URL=False, download_loc=None, useNet=True):
+                       URL=False, download_loc=None, useNet=True,
+                       buffer=None,imageKey=None):
     """Attempt to import a filename, using a list of reader objects.
+    
+    This is not intended to be called directly in scripting, only by
+    routines like G2Project.add_phase() and G2Project.add_image but
+    this may be used to read CIFs, as is done with OnISODISTORT_kvec
+    in GSASIIpwdGUI.
 
-    Returns the first reader object which worked."""
+    Returns the first reader object which is read successfully.
+    """
     if URL is True:
         filename = downloadFile(filename,download_loc)
     # Translated from OnImportGeneric method in GSASIIGUI.py
@@ -496,20 +503,29 @@ def import_generic(filename, readerlist, fmthint=None, bank=None,
             #                    .format(filename,len(rd.selections)))
 
             block = 0
-            rdbuffer = {}
+            if buffer is None:
+                rdbuffer = {}
+            else:
+                rdbuffer = buffer
             repeat = True
             while repeat:
                 repeat = False
                 block += 1
                 rd.objname = os.path.basename(filename)
+                if imageKey:
+                    blockKey = imageKey
+                else:
+                    blockKey = block
                 if GSASIIpath.GetConfigValue('debug'):
-                    flag = rd.Reader(filename,buffer=rdbuffer, blocknum=block)
+                    # don't use try/except so we see errors
+                    flag = rd.Reader(filename,buffer=rdbuffer, blocknum=blockKey)
                 else:
                     try:
-                        flag = rd.Reader(filename,buffer=rdbuffer, blocknum=block)
+                        flag = rd.Reader(filename,buffer=rdbuffer, blocknum=blockKey)
                     #except Exception as msg:
                     except Exception:
                         flag = False
+                if imageKey: rd.repeat = False # only read one image      
                 if flag:
                     # Omitting image loading special cases
                     rd.readfilename = filename
@@ -521,12 +537,12 @@ def import_generic(filename, readerlist, fmthint=None, bank=None,
                 if rd.warnings:
                     G2fil.G2Print("Read warning by", rd.formatName, "reader:",
                           rd.warnings)
+                elif imageKey is not None:
+                    G2fil.G2Print(f"{filename} block {imageKey} read by Reader {rd.formatName}")
                 elif bank is None:
-                    G2fil.G2Print("{} read by Reader {}"
-                              .format(filename,rd.formatName))
+                    G2fil.G2Print(f"{filename} read by Reader {rd.formatName}")
                 else:
-                    G2fil.G2Print("{} block # {} read by Reader {}"
-                              .format(filename,bank,rd.formatName))
+                    G2fil.G2Print(f"{filename} block # {bank} read by Reader {rd.formatName}")
                 return rd_list
     raise G2ImportException(f"No reader could read file: {filename}")
 
@@ -2511,8 +2527,8 @@ class G2Project(G2ObjectWrapper):
 
         Examples::
 
-            gpx.add_NewVarConstr(('0::AFrac:0','0::AFrac:1'),[0.5,0.5],'avg',True)
-            gpx.add_NewVarConstr(('0::AFrac:0','0::AFrac:1'),[1,-1],'diff',False,False)
+            gpx.add_NewVarConstr(('0::Afrac:0','0::Afrac:1'),[0.5,0.5],'avg',True)
+            gpx.add_NewVarConstr(('0::Afrac:0','0::Afrac:1'),[1,-1],'diff',False,False)
 
         The example above is a way to treat two variables that are closely correlated.
         The first variable, labeled as avg, allows the two variables to refine in tandem
@@ -2651,7 +2667,7 @@ class G2Project(G2ObjectWrapper):
 
     def add_image(self, imagefile, fmthint=None, defaultImage=None,
                       indexList=None, cacheImage=False,
-                      URL=False, download_loc=None):
+                      URL=False, download_loc=None,imageKey=None):
         """Load an image into a project
 
         :param str imagefile: The image file to read, a filename.
@@ -2665,7 +2681,9 @@ class G2Project(G2ObjectWrapper):
         :param list indexList: specifies the image numbers (counting from zero)
           to be used from the file when a file has multiple images. A value of
           ``[0,2,3]`` will cause the only first, third and fourth images in the file
-          to be included in the project.
+          to be included in the project. Note that with this option, all images
+          are read from the file, but only the specified image(s) are retained.
+          Do not use imageKey and indexList together.
         :param bool cacheImage: When True, the image is cached to save
           in rereading it later. Default is False (no caching).
         :param bool URL: if True, the contents of imagefile is a URL
@@ -2690,12 +2708,24 @@ class G2Project(G2ObjectWrapper):
           If URL is specified and the default download_loc
           value is used (None), the image will be saved in a temporary
           location that will persist until the OS removes it.
+        :param imageKey: This can be a single image number (int) to read
+          a specific image (numbered starting with 1) or for files
+          that have images in named sections, (right now this is only HDF5),
+          it can be a tuple of form ('section',0) where 'section' is
+          the section name (such as '/exchange/data') and 0 is the image
+          number in that section. If imageKey is specified, only one image
+          is read. 
+          Do not use imageKey and indexList together.
         :returns: a list of :class:`G2Image` object(s) for the added image(s)
         """
         LoadG2fil()
         if not URL: imagefile = os.path.abspath(os.path.expanduser(imagefile))
+        rdbuffer = {}
+        if imageKey and indexList: 
+            raise Exception("add_image Error: Do not use imageKey and indexList together.")
         readers = import_generic(imagefile, Readers['Image'],
-                    fmthint=fmthint, URL=URL, download_loc=download_loc)
+                    fmthint=fmthint, URL=URL, download_loc=download_loc,
+                                     buffer=rdbuffer,imageKey=imageKey)
         objlist = []
         for i,rd in enumerate(readers):
             if indexList is not None and i not in indexList:
@@ -2706,10 +2736,25 @@ class G2Project(G2ObjectWrapper):
                 #see this: G2IO.EditImageParms(self,rd.Data,rd.Comments,rd.Image,imagefile)
                 rd.SciPy = False
             rd.readfilename = imagefile
-            if rd.repeatcount == 1 and not rd.repeat: # skip image number if only one in set
-                rd.Data['ImageTag'] = None
+            TreeLbl = 'IMG '+os.path.basename(imagefile)
+            if 'ImageTag' in rd.Data: # HDF5 quickread by tag
+                TreeLbl += f" {rd.Data['ImageTag'][0]}-{rd.Data['ImageTag'][1]}"
+                rd.Data['ImageTag'] = (rd.Data['ImageTag'][0], 
+                                       rd.Data['ImageTag'][1],
+                                       rd.Image.shape)
+                imageInfo = (imagefile,rd.Data.get('ImageTag'))
+            elif rd.repeatcount == 1 and not rd.repeat and not imageKey: # skip image number if only one in set
+                imageInfo = imagefile
+            elif 'imagemap' in rdbuffer:
+                # if there is an image map, save the entry there rather than
+                # a simple number (HDF5 only at present)
+                rd.Data['ImageTag'] = rdbuffer['imagemap'][rd.imageEntry]
+                TreeLbl += f' #{i:04}'
+                imageInfo = (imagefile,rd.Data.get('ImageTag'))
             else:
                 rd.Data['ImageTag'] = rd.repeatcount
+                imageInfo = (imagefile,rd.Data.get('ImageTag'))
+                TreeLbl += f' #{rd.Data.get("ImageTag",-1):04}'
             rd.Data['formatName'] = rd.formatName
             if rd.sumfile:
                 rd.readfilename = rd.sumfile
@@ -2718,13 +2763,6 @@ class G2Project(G2ObjectWrapper):
             # Code from G2IO.LoadImage2Tree(rd.readfilename,self,rd.Comments,rd.Data,rd.Npix,rd.Image)
             Imax = np.amax(rd.Image)
             ImgNames = [i[0] for i in self.names if i[0].startswith('IMG ')]
-            TreeLbl = 'IMG '+os.path.basename(imagefile)
-            ImageTag = rd.Data.get('ImageTag')
-            if ImageTag:
-                TreeLbl += ' #'+'%04d'%(ImageTag)
-                imageInfo = (imagefile,ImageTag)
-            else:
-                imageInfo = imagefile
             TreeName = G2obj.MakeUniqueLabel(TreeLbl,ImgNames)
             # MT dict to contain image info
             ImgDict = {}
@@ -2824,7 +2862,8 @@ class G2Project(G2ObjectWrapper):
             imageList = self.images()
 
         LoadG2fil()
-        # code based on GSASIIimgGUI..OnDistRecalib
+        # code based on GSASIIimgGUI.OnMultiDistRecalib, but needs an update
+        raise Exception('This command needs to be revised to function properly')
         obsArr = np.array([]).reshape(0,4)
         parmDict = {}
         varList = []
@@ -3214,6 +3253,25 @@ class G2Project(G2ObjectWrapper):
             return list(self['Covariance']['data']['parmDict'].keys())
         except:
             return
+
+    def get_LastFitResults(self):
+        '''Returns the shifts on refined variables and their uncertainties in the last refinement cycle
+
+        :returns: a dict with the last least-squares shifts and a dict of sigma values.
+        '''
+        if 'Lastshft' not in self['Covariance']['data']:
+            raise G2ScriptException('No shift values found in project, has a refinement been run?')
+        if 'varyList' not in self['Covariance']['data']:
+            raise G2ScriptException('No varyList found in project, has a refinement been run?')
+        if 'sig' not in self['Covariance']['data']:
+            raise G2ScriptException('No sigma values found in project, has a refinement been run?')
+        try:
+            return (
+                dict(zip(self['Covariance']['data']['varyList'],self['Covariance']['data']['Lastshft'].tolist())),
+                dict(zip(self['Covariance']['data']['varyList'],self['Covariance']['data']['sig'].tolist()))
+                )
+        except:
+            return None,None
 
     def get_Variable(self,var):
         '''Returns the value and standard uncertainty (esd) for a variable
@@ -6585,7 +6643,7 @@ class G2Image(G2ObjectWrapper):
                     'outAzimuths'],
         'float': ['cutoff', 'setdist', 'wavelength', 'Flat Bkg',
                       'azmthOff', 'tilt', 'calibdmin', 'rotation',
-                      'distance', 'DetDepth'],
+                      'distance', 'DetDepth','sag'],
         'bool': ['setRings', 'setDefault', 'centerAzm', 'fullIntegrate',
                      'DetDepthRef', 'showLines'],
         'str': ['SampleShape', 'binType', 'formatName', 'color',
@@ -6769,6 +6827,9 @@ class G2Image(G2ObjectWrapper):
 
         :param bool clean: causes the calbration information to be deleted
         '''
+        #patch
+        self.data['Image Controls']['sag'] = self.data['Image Controls'].get('sag',0.0)
+        #end patch
         ImageControls = copy.deepcopy(self.data['Image Controls'])
         if clean:
             ImageControls['showLines'] = True

@@ -31,19 +31,22 @@ import copy
 import random as ran
 import numpy as np
 
-from . import GSASIIpath
-from . import GSASIIdataGUI as G2gd
-from . import GSASIIpwdGUI as G2pdG
-from . import GSASIIspc as G2spc
-from . import GSASIIobj as G2obj
-from . import GSASIIfiles as G2fil
-from . import GSASIIElem as G2elem
-from . import GSASIIpwd as G2pwd
-from . import GSASIIlattice as G2lat
-from . import GSASIImath as G2mth
-#from . import GSASIIstrMain as G2stMn
-from . import GSASIImiscGUI as G2IO
-from .tutorialIndex import tutorialIndex
+if __name__ == '__main__': # allow this file to be run directly
+    sys.path.insert(0,os.path.dirname(os.path.dirname(__file__)))
+import GSASII
+from GSASII import GSASIIpath
+from GSASII import GSASIIdataGUI as G2gd
+from GSASII import GSASIIpwdGUI as G2pdG
+from GSASII import GSASIIspc as G2spc
+from GSASII import GSASIIobj as G2obj
+from GSASII import GSASIIfiles as G2fil
+from GSASII import GSASIIElem as G2elem
+from GSASII import GSASIIpwd as G2pwd
+from GSASII import GSASIIlattice as G2lat
+from GSASII import GSASIImath as G2mth
+#from GSASII import GSASIIstrMain as G2stMn
+from GSASII import GSASIImiscGUI as G2IO
+from GSASII.tutorialIndex import tutorialIndex
 
 # Define a short names for convenience
 DULL_YELLOW = (230,230,190)
@@ -60,10 +63,7 @@ try:
 except AttributeError:
     pass
 
-try:    #phoenix
-    wxValidator = wx.Validator
-except AttributeError:  #classic - i.e. old
-    wxValidator = wx.pyValidator
+wxValidator = wx.Validator
 
 #### Fixed definitions for wx Ids ################################################################################
 def Define_wxId(*args):
@@ -862,7 +862,8 @@ class NumberValidator(wxValidator):
             tc.SetInsertionPoint(ins) # put insertion point back
             return False
         else: # valid input
-            tc.SetBackgroundColour(tc.defaultBackgroundColor)
+            # tc.SetBackgroundColour(tc.defaultBackgroundColor)
+            tc.SetBackgroundColour((200,255,200))
             tc.SetForegroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNTEXT))
             tc.Refresh()
             return True
@@ -899,6 +900,7 @@ class NumberValidator(wxValidator):
                 self.CheckInput(True)
             else:
                 self.CheckInput(False)
+                tc.SetBackgroundColour(tc.defaultBackgroundColor)
             if event: event.Skip()
             return
         if key < wx.WXK_SPACE or key == wx.WXK_DELETE or key > 255: # control characters get processed
@@ -1127,7 +1129,7 @@ def G2SpinWidget(parent,loc,key,label,xmin=None,xmax=None,nDig=None,
 
     :param int size: size of TextCtrl in pixels. Defaults to (50,25).
 
-    :returns: returns a wx.BoxSizer containing the widgets
+    :returns: returns a wx.BoxSizer containing the widgets and the value entry widget
     '''
 
     def _onSpin(event):
@@ -1157,7 +1159,7 @@ def G2SpinWidget(parent,loc,key,label,xmin=None,xmax=None,nDig=None,
                 xmin=xmin,xmax=xmax,typeHint=typeHint,size=size)
     hSizer.Add(vEntry,0,wx.ALL|wx.ALIGN_CENTER_VERTICAL,5)
     hSizer.Add(spin,0,wx.ALL|wx.ALIGN_CENTER_VERTICAL)
-    return hSizer
+    return hSizer,vEntry
 
 ################################################################################
 def HorizontalLine(sizer,parent):
@@ -1671,14 +1673,12 @@ class ScrolledMultiEditor(wx.Dialog):
                     but = (-1,-1)
                 else:
                     import wx.lib.colourselect as wscs  # is there a way to test?
-                    but = wscs.ColourSelect(label='v', # would like to use '\u2193' or '\u25BC' but not in WinXP
+#                    but = wscs.ColourSelect(label='v', # would like to use '\u2193' or '\u25BC' but not in WinXP
+                    but = wscs.ColourSelect(label='\u2193',
                                             parent=panel,colour=(255,255,200),size=wx.Size(30,23),
                                             style=wx.RAISED_BORDER)
                     but.Bind(wx.EVT_BUTTON, self._OnCopyButton)
-                    if 'phoenix' in wx.version():
-                        but.SetToolTip('Press to copy adjacent value to all rows below')
-                    else:
-                        but.SetToolTipString('Press to copy adjacent value to all rows below')
+                    but.SetToolTip('Press to copy adjacent value to all rows below')
                     self.ButtonIndex[but] = i
                 subSizer.Add(but)
             # create the validated TextCrtl, store it and add it to the sizer
@@ -1704,9 +1704,8 @@ class ScrolledMultiEditor(wx.Dialog):
         panel.SetAutoLayout(1)
         panel.SetupScrolling()
         # patch for wx 2.9 on Mac
-        i,j= wx.__version__.split('.')[0:2]
-        if int(i)+int(j)/10. > 2.8 and 'wxOSX' in wx.PlatformInfo:
-            panel.SetMinSize((subSizer.GetSize()[0]+30,panel.GetSize()[1]))
+        #if 'wxOSX' in wx.PlatformInfo:
+        #    panel.SetMinSize((subSizer.GetSize()[0]+30,panel.GetSize()[1]))
         mainSizer.Add(panel,1, wx.ALL|wx.EXPAND,1)
 
         # Sizer for OK/Close buttons. N.B. on Close changes are discarded
@@ -1722,6 +1721,7 @@ class ScrolledMultiEditor(wx.Dialog):
         self.SetSizer(mainSizer)
         mainSizer.Fit(self)
         self.SetMinSize(self.GetSize())
+        self.SendSizeEvent()
 
     def _OnCopyButton(self,event):
         'Implements the copy down functionality'
@@ -1951,21 +1951,13 @@ class G2MultiChoiceDialog(wx.Dialog):
 
     def _ShowSelections(self):
         'Show the selection state for displayed items'
-        if 'phoenix' in wx.version():
-            self.clb.SetCheckedItems(
-                [i for i in range(len(self.filterlist)) if self.Selections[self.filterlist[i]]]
-            ) # Note anything previously checked will be cleared.
-        else:
-            self.clb.SetChecked(
-                [i for i in range(len(self.filterlist)) if self.Selections[self.filterlist[i]]]
-            ) # Note anything previously checked will be cleared.
+        self.clb.SetCheckedItems(
+            [i for i in range(len(self.filterlist)) if self.Selections[self.filterlist[i]]]
+        ) # Note anything previously checked will be cleared.
 
     def _SetAll(self,event):
         'Set all viewed choices on'
-        if 'phoenix' in wx.version():
-            self.clb.SetCheckedItems(range(0,len(self.filterlist),self.Stride))
-        else:
-            self.clb.SetChecked(range(0,len(self.filterlist),self.Stride))
+        self.clb.SetCheckedItems(range(0,len(self.filterlist),self.Stride))
         self.stride.SetValue('1')
         self.Stride = 1
 
@@ -2159,14 +2151,9 @@ class G2MultiChoiceWindow(wx.BoxSizer):
 
     def _ShowSelections(self):
         'Show the selection state for displayed items'
-        if 'phoenix' in wx.version():
-            self.clb.SetCheckedItems(
-                [i for i in range(len(self.filterlist)) if self.Selections[self.filterlist[i]]]
-            ) # Note anything previously checked will be cleared.
-        else:
-            self.clb.SetChecked(
-                [i for i in range(len(self.filterlist)) if self.Selections[self.filterlist[i]]]
-            ) # Note anything previously checked will be cleared.
+        self.clb.SetCheckedItems(
+            [i for i in range(len(self.filterlist)) if self.Selections[self.filterlist[i]]]
+        ) # Note anything previously checked will be cleared.
         if self.OnChange:
             self.OnChange(self.GetSelections(),*self.OnChangeArgs)
         try:
@@ -2179,10 +2166,7 @@ class G2MultiChoiceWindow(wx.BoxSizer):
 
     def _SetAll(self,event):
         'Set all viewed choices on'
-        if 'phoenix' in wx.version():
-            self.clb.SetCheckedItems(range(0,len(self.filterlist),self.Stride))
-        else:
-            self.clb.SetChecked(range(0,len(self.filterlist),self.Stride))
+        self.clb.SetCheckedItems(range(0,len(self.filterlist),self.Stride))
         self.stride.SetValue('1')
         self.Stride = 1
         self.GetSelections() # record current selections
@@ -2420,10 +2404,7 @@ def SelectEdit1Var(G2frame,array,labelLst,elemKeysLst,dspLst,refFlgElem):
 
     def OnChoice(event):
         'Respond when a parameter is selected in the Choice box'
-        if 'phoenix' in wx.version():
-            valSizer.Clear(True)
-        else:
-            valSizer.DeleteWindows()
+        valSizer.Clear(True)
         lbl = event.GetString()
         copyopts['currentsel'] = lbl
         i = labelLst.index(lbl)
@@ -2772,6 +2753,28 @@ def G2MessageBox(parent,msg,title='Error'):
     dlg.ShowModal()
     dlg.Destroy()
 
+################################################################################
+class G2ModelessMessage(wx.Dialog):
+    '''Simple code to display an infomational message in a non-modal
+    window.
+    '''
+    def __init__(self, parent, message, title):
+        def onClose(event):
+            try:
+                self.Destroy()
+            except:
+                pass
+        super().__init__(parent, title=title, style=wx.DEFAULT_DIALOG_STYLE | wx.STAY_ON_TOP)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        text = wx.StaticText(self, label=message)
+        text.Wrap(400)
+        sizer.Add(text, 0, wx.ALL | wx.ALIGN_CENTER, 20)
+        close_btn = wx.Button(self, wx.ID_CLOSE, "Close")
+        sizer.Add(close_btn, 0, wx.BOTTOM | wx.ALIGN_CENTER, 15)
+        close_btn.Bind(wx.EVT_BUTTON, onClose)
+        self.Bind(wx.EVT_CLOSE, onClose)
+        self.SetSizerAndFit(sizer)
+        self.Show(True)
 ################################################################################
 def findValsInNotebook(data,target):
     'Pull a string of values from saved values in the GSAS-II notebook'
@@ -5800,20 +5803,12 @@ class GSGrid(wg.Grid):
                 if event: event.Skip()
                 return
             if hinttext is None: hinttext = ''
-            if 'phoenix' in wx.version():
-                win.SetToolTip(hinttext)
-            else:
-                win.SetToolTipString(hinttext)
+            win.SetToolTip(hinttext)
             prev_rowcol[:] = [row,col,win]
             if event: event.Skip()
-        if 'phoenix' in wx.version():
-            self.GetGridWindow().Bind(wx.EVT_MOTION,OnMouseMotion)
-            if colLblCallback: self.GetGridColLabelWindow().Bind(wx.EVT_MOTION,OnMouseMotion)
-            if rowLblCallback: self.GetGridRowLabelWindow().Bind(wx.EVT_MOTION,OnMouseMotion)
-        else:
-            wx.EVT_MOTION(self.GetGridWindow(), OnMouseMotion)
-            if colLblCallback: wx.EVT_MOTION(self.GetGridColLabelWindow(), OnMouseMotion)
-            if rowLblCallback: wx.EVT_MOTION(self.GetGridRowLabelWindow(), OnMouseMotion)
+        self.GetGridWindow().Bind(wx.EVT_MOTION,OnMouseMotion)
+        if colLblCallback: self.GetGridColLabelWindow().Bind(wx.EVT_MOTION,OnMouseMotion)
+        if rowLblCallback: self.GetGridRowLabelWindow().Bind(wx.EVT_MOTION,OnMouseMotion)
 
     def setupPopup(self,lblList,callList):
         '''define a callback that creates a popup menu. The rows associated
@@ -6028,10 +6023,7 @@ class GridFractionEditor(wg.PyGridCellEditor):
     an expression by +, * or / respectively.
     '''
     def __init__(self,grid):
-        if 'phoenix' in wx.version():
-            wg.GridCellEditor.__init__(self)
-        else:
-            wg.PyGridCellEditor.__init__(self)
+        wg.GridCellEditor.__init__(self)
 
     def Create(self, parent, id, evtHandler):
         self._tc = wx.TextCtrl(parent, id, "")
@@ -6044,11 +6036,8 @@ class GridFractionEditor(wg.PyGridCellEditor):
         self._tc.Bind(wx.EVT_CHAR, self.OnChar)
 
     def SetSize(self, rect):
-        if 'phoenix' in wx.version():
-            self._tc.SetSize(rect.x, rect.y, rect.width+2, rect.height+2,
-                               wx.SIZE_ALLOW_MINUS_ONE)
-        else:
-            self._tc.SetDimensions(rect.x, rect.y, rect.width+2, rect.height+2,                                wx.SIZE_ALLOW_MINUS_ONE)
+        self._tc.SetSize(rect.x, rect.y, rect.width+2, rect.height+2,
+                           wx.SIZE_ALLOW_MINUS_ONE)
 
     def BeginEdit(self, row, col, grid):
         self.startValue = grid.GetTable().GetValue(row, col)
@@ -6278,10 +6267,8 @@ class MyHelp(wx.Menu):
             helpobj = self.Append(wx.ID_ANY,'Switch to/from branch',
                     'Switch to/from a GSAS-II development branch')
             frame.Bind(wx.EVT_MENU, gitSelectBranch, helpobj)
-        # test if conda present? 
         helpobj = self.Append(wx.ID_ANY,'Add packages for more functionality',
                 'Install optional Python packages to provide more GSAS-II capabilities')
-        helpobj.Enable(bool(G2fil.condaRequestList))
         frame.Bind(wx.EVT_MENU, SelectPkgInstall, id=helpobj.GetId())
         # provide special help topic names for extra items in help menu
         for lbl,indx in morehelpitems:
@@ -6298,6 +6285,9 @@ class MyHelp(wx.Menu):
         helpobj = self.Append(wx.ID_ANY,'Help on current data tree item\tF1',
                 'Access web page on selected item in tree')
         frame.Bind(wx.EVT_MENU, self.OnHelpById, id=helpobj.GetId())
+        helpobj = self.Append(wx.ID_ANY,'Help via LLM Docs Search',
+                    'Use LLM to search GSAS-II documentation')
+        frame.Bind(wx.EVT_MENU, LLMsearch, id=helpobj.GetId())
         helpobj = self.Append(wx.ID_ANY,'Citation information',
                 'Show papers that GSAS-II users may wish to cite')
         frame.Bind(wx.EVT_MENU, ShowCitations, id=helpobj.GetId())
@@ -6332,10 +6322,7 @@ class MyHelp(wx.Menu):
 
     def OnHelpAbout(self, event):
         "Display an 'About GSAS-II' box"
-        try:
-            import wx.adv as wxadv  # AboutBox moved here in Phoenix
-        except:
-            wxadv = wx
+        import wx.adv as wxadv
         info = wxadv.AboutDialogInfo()
         info.Name = 'GSAS-II'
         info.SetVersion(GSASIIpath.getG2VersionInfo())
@@ -6660,7 +6647,7 @@ def viewWebPage(parent,URL='',size=(750,450),newFrame=False,HTML=''):
                     lastWebFrame.wv.SetPage(HTML,'')
                 else:
                     lastWebFrame.wv.LoadURL(URL)
-                return dlg
+                return lastWebFrame
         except:
             pass
     dlg = wx.Frame(parent,size=size)
@@ -7231,10 +7218,7 @@ class SelectConfigSetting(wx.Dialog):
             self.vars['Contour_color'][1] = self.colSel.GetValue()
             self.OnChange(event)
 
-        if 'phoenix' in wx.version():
-            self.varsizer.Clear(True)
-        else:
-            self.varsizer.DeleteWindows()
+        self.varsizer.Clear(True)
         var = self.choice[0]
         showdef = True
         self.colorText = None
@@ -8624,10 +8608,7 @@ def AutoLoadFiles(G2frame,FileTyp='pwd'):
                     G2fil.G2Print("Warning: {} Reader failed to read {}"
                                       .format(rd.formatName,f))
                 Iparm1, Iparm2 = G2sc.load_iprms(Settings['instfile'],rd)
-                if 'phoenix' in wx.version():
-                    HistName = 'PWDR '+rd.idstring
-                else:
-                    HistName = 'PWDR '+G2obj.StripUnicode(rd.idstring,'_')
+                HistName = 'PWDR '+rd.idstring
                 # make new histogram names unique
                 HistName = G2obj.MakeUniqueLabel(HistName,Settings['ReadList'])
                 Settings['ReadList'].append(HistName)
@@ -8767,10 +8748,7 @@ def AutoLoadFiles(G2frame,FileTyp='pwd'):
                 else:
                     G2fil.G2Print("Warning: {} Reader failed to read {}"
                                       .format(rd.formatName,f))
-                if 'phoenix' in wx.version():
-                    HistName = 'PDF  '+rd.idstring
-                else:
-                    HistName = 'PDF  '+G2obj.StripUnicode(rd.idstring,'_')
+                HistName = 'PDF  '+rd.idstring
                 HistName = G2obj.MakeUniqueLabel(HistName,Settings['ReadList'])
                 Settings['ReadList'].append(HistName)
                 # put into tree
@@ -10268,225 +10246,8 @@ The switch will be made unless Cancel is pressed.'''
     G2fil.openInNewTerm(project)
     print ('exiting GSAS-II')
     sys.exit()
-    
-def gitSwitchMaster2Main():
-    '''This is "patch" code to switch from the master branch
-    to the main branch. At some point this will be made part of the
-    update process in the master branch. This routine is not needed in 
-    the main branch.
-
-    Switching is a bit complicated as additional Python packages are needed
-    and becuase the GSASII.py file gets renamed to G2.py so "shortcuts" need 
-    to be re-created to reference that.
-    '''
-    G2frame = wx.App.GetMainTopWindow()
-    gitInst = GSASIIpath.HowIsG2Installed()
-    if not gitInst.startswith('github-rev'):
-        G2MessageBox(G2frame,
-            'Unable to update to new branch because GSAS-II was not installed from GitHub; installed as: '+gitInst,
-            'Not a git install')
-        return
-    if not os.path.exists(GSASIIpath.path2GSAS2): 
-        msg = f'Warning: Directory {GSASIIpath.path2GSAS2} not found; not installed properly'
-        print(msg)
-        G2MessageBox(G2frame,msg)
-        return
-    if os.path.exists(os.path.join(GSASIIpath.path2GSAS2,'..','.git')):
-        path2repo = os.path.join(path2GSAS2,'..')  # expected location
-    elif os.path.exists(os.path.join(GSASIIpath.path2GSAS2,'.git')):
-        path2repo = GSASIIpath.path2GSAS2
-    else:
-        msg = f'Warning: Repository {path2GSAS2} not found; Update not possible if not installed with git.'
-        print(msg)
-        G2MessageBox(G2frame,msg)
-        return
-    try:
-        g2repo = GSASIIpath.openGitRepo(path2repo)
-    except Exception as msg:
-        msg = f'Warning: Failed to open repository. Error: {msg}'
-        print(msg)
-        G2MessageBox(G2frame,msg)
-        return
-    if g2repo.is_dirty() or g2repo.index.diff("HEAD"): # changed or staged files
-        msg = 'You have local changes. They must be reset, committed or stashed before an update is possible'
-        print(msg)
-        G2MessageBox(G2frame,msg,'Local changes')
-
-        return
-    # Should not get here with detached head (regressed version) need to be on latest (last) version
-    # go get into this routine
-    if g2repo.head.is_detached:
-        G2MessageBox(G2frame,
-            'You have a old previous version loaded; you must be on a branch head to updateswitching branches',
-            'Detached head')
-        return
-    # this also should not happen
-    if g2repo.active_branch.name != "master":
-        G2MessageBox(G2frame,
-            f'You are on the {g2repo.active_branch.name} branch. This can only be run from master.',
-            'Not on master')
-        return
-        
-    # make sure that branches are accessible & get updates
-    print('getting updates...',end='')
-    g2repo.git.remote('set-branches','origin','*')
-    print('..',end='')
-    g2repo.git.fetch()
-    print('.done')
-    branchlist = [i.strip() for i in g2repo.git.branch('-r').split('\n') if '->' not in i]
-    choices = [i for i in  [os.path.split(i)[1] for i in branchlist] if i != g2repo.active_branch.name]
-    b = "main"
-    if b not in choices: 
-        G2MessageBox(G2frame,
-            f'You are on the {g2repo.active_branch.name!r} branch, but branch {b!r} was not found.',
-            f'Unexpected: No {b} branch')
-        return
-    if not GSASIIpath.condaTest():
-        msg = '''In April 2025, GSAS-II switched to a new branch ("main") 
-that has significant internal reorganization requested by several users. All 
-future updates will be on this branch. It appears you have installed Python 
-manually, so an automatic update is not possible.
-
-You can install the recommended Python packages and manually use git 
-commands to switch from the "master" branch to the "main" branch, but 
-it may be easier to simply reinstall GSAS-II. 
-
-See web page GSASII.github.io for information on how to install GSAS-II. 
-'''
-        ShowScrolledInfo(G2frame,msg,header='Please Note',
-                                height=250)
-        return
-
-    # all checks passed, check with user and then get started
-    msg = f'''In April 2025, GSAS-II GSAS-II switched to a new branch ("main") 
-that has significant internal reorganization requested by several users. All 
-future updates will be on this branch. If you continue here, GSAS-II will 
-make the changes needed to move your installation to the new branch:
-
-  1) Additional Python packages needed by GSAS-II will be installed. 
-  2) Git will be used to install the latest GSAS-II files 
-  3) Shortcuts to the latest GSAS-II version will be installed; shortcuts 
-     previously installed will fail if not replaced.
-
-If the update fails, please reinstall GSAS-II from https://bit.ly/G2download
-(https://github.com/AdvancedPhotonSource/GSAS-II-buildtools/releases/latest)
-See web page GSASII.github.io for information on how to install.
-
-Confirm switching from git branch {g2repo.active_branch.name!r} to {b!r} by
-selecting "Save" or "Skip" below ("Cancel" will quit the update).
-
-If confirmed here, GSAS-II will restart after the update.
-
-Do you want to save your project before restarting?
-Select "Save" to save, "Skip" to skip the save, or "Cancel"
-to discontinue the update process.
-
-The update will be made unless Cancel is pressed.'''
-    ans = ShowScrolledInfo(G2frame,msg,header='Please Note',
-                                height=400,
-                                buttonlist=[
-           ('Save project and update',
-            lambda event: event.GetEventObject().GetParent().EndModal(wx.ID_OK)),
-           ('Skip save and update',
-            lambda event: event.GetEventObject().GetParent().EndModal(wx.ID_NO)),
-           ('Cancel',
-            lambda event: event.GetEventObject().GetParent().EndModal(wx.ID_CANCEL))
-                                    ])
-    if ans == wx.ID_CANCEL:
-        return
-    elif ans == wx.ID_YES:
-        ans = G2frame.OnFileSave(None)
-        if not ans: return
-        project = os.path.abspath(G2frame.GSASprojectfile)
-        print(f"Restarting GSAS-II with project file {project!r}")
-    else:
-        print("Restarting GSAS-II without a project file ")
-        project = None
-
-    # 1) install the needed Python packages
-    #=======================================
-    # listing of GSAS-II packages here; TODO: should be unified into a single location
-    #ReqPackages = ['git','numpy','matplotlib','wx','OpenGL','scipy'] # assume present
-    NewReqPackages = ['CifFile', 'conda'] # make sure installed
-    # packages that are optional but should be present for all of GSAS-II to function:
-    RunOptPackages = ['PIL','requests','h5py','imageio','zarr','xmltodict','pybaselines','seekpath']
-    # where the import name is not the package name, translate with:
-    pkgnames = {'wx':'wxpython', 'OpenGL':'pyopengl','CifFile':'PyCifRW','PIL':'pillow',
-                'git':'gitpython'}
-    install = ['PyCifRW','pybaselines'] # these need to be reinstalled as they are no longer "vendored"
-    for pkglist in NewReqPackages,RunOptPackages: # Packages
-        for pkg in pkglist:
-            try:
-                exec('import '+pkg)
-            except:
-                install.append(pkgnames.get(pkg,pkg))
-    #install = [] # TODO: skip on testing
-    if install:
-        print('Installing packages: ',' ,'.join(install))
-        dlg = wx.ProgressDialog('Installing Python packages',
-        f'Please wait while conda downloads and installs {len(install)} package(s). This can take a while.',10,
-            style=wx.PD_AUTO_HIDE)
-        dlg.Update(1)
-        GSASIIpath.condaInstall(install)
-        dlg.Destroy()
-    
-
-    # 2) switch to the main branch
-    #=======================================
-    print('Starting checkout of new branch')
-    a = g2repo.git.checkout("main")
-    if 'Your branch is behind' in a:
-        print('updating local copy of branch')
-        print(g2repo.git.pull())
-
-    # post-install stuff
-    print(f'Byte-compiling all .py files in {GSASIIpath.path2GSAS2!r}... ',end='')
-    import compileall
-    compileall.compile_dir(GSASIIpath.path2GSAS2,quiet=True)
-    print('done')
-    
-    # now run the replaced system-specific installers to create shortcuts
-    # pointing to G2.py 
-    print('\nStart system-specific install')
-    for k,s in {'win':"makeBat.py", 'darwin':"makeMacApp.py",
-                    'linux':"makeLinux.py"}.items():
-        if sys.platform.startswith(k):
-            script = os.path.join(GSASIIpath.path2GSAS2,'install',s)
-            if not os.path.exists(script):
-                print(f'Platform-specific script {script!r} not found')
-                script = ''
-            break
-    else:
-        print(f'Unknown platform {sys.platform}')
-    # on a Mac, make an applescript
-    if script and sys.platform.startswith('darwin'):
-        print(f'running {script}')
-        import subprocess
-        subprocess.run([sys.executable,script],cwd=GSASIIpath.path2GSAS2)
-    # On windows make a batch file with hard-coded paths to Python and GSAS-II
-    elif script and sys.platform.startswith('win'):
-        script = os.path.normpath(os.path.join(GSASIIpath.path2GSAS2,'install',s))
-        print(f'running {script!r}')
-        import subprocess
-        subprocess.run([sys.executable,script],cwd=GSASIIpath.path2GSAS2)
-    # On linux, make a desktop icon with hard-coded paths to Python and GSAS-II
-    elif script:
-        sys.argv = [script]
-        print(f'running {sys.argv[0]}')
-        with open(sys.argv[0]) as source_file:
-            exec(source_file.read())
-
-    print('system-specific install done, restarting\n\n')
-
-    g2script = os.path.join(GSASIIpath.path2GSAS2,'G2.py')
-    if os.path.exists(g2script):
-        G2fil.openInNewTerm(project,g2script)
-        print ('exiting this session after update completed')
-        sys.exit()
-    else:
-        print(f'Unexpected error: file {g2script!r} not found')
-    
 #===========================================================================
+
 # Importer GUI stuff
 def ImportMsg(parent,msgs):
     '''Show a message with the warnings from importers that
@@ -10504,7 +10265,7 @@ def ImportMsg(parent,msgs):
 
 def patch_condarc():
     '''Comment out any references to "file:" locations in the .condarc
-    file. These should not be there and cause problems.
+    file. These should not be there and they cause problems.
     '''
     rc = os.path.normpath(os.path.join(GSASIIpath.path2GSAS2,'..','..','.condarc'))
 
@@ -10536,11 +10297,14 @@ def SelectPkgInstall(event):
             else:
                 choices[item] = key
                 keylist.append(item)
+    if len(choices) == 0:
+        G2MessageBox(G2frame,'No packages need to be installed')
+        return
     msg = 'Select package(s) to install'
     if GSASIIpath.condaTest():
-        msg += ' using conda'
+        msg += '. Installing using conda'
     else:
-        msg += ' using pip'
+        msg += '. Installing using pip'
     sel = MultiColMultiSelDlg(G2frame, 'Install packages?', msg,
                              [('package',120,0),('needed by',300,0)],
                              [i for i in choices.items()])
@@ -10552,8 +10316,6 @@ def SelectPkgInstall(event):
                     parent=G2frame)
     if GSASIIpath.condaTest():
         patch_condarc()
-        if not GSASIIpath.condaTest(True):
-            GSASIIpath.addCondaPkg()
         err = GSASIIpath.condaInstall(pkgs)
         if err:
             print(f'Error from conda: {err}')
@@ -10669,6 +10431,142 @@ def StringSearchTemplate(parent,title,prompt,start,help=None):
         val = valItem.GetValue()
         dlg.Destroy()
     return val
+
+def InstallLLMindex(G2frame=None):
+    '''Download the documentation index files for LLM with a status dialog.
+    Used with Ollama only
+    '''
+    pdlg = wx.ProgressDialog('Installing Index',
+                            'Downloading and installing index files.\n\n'+
+                            'Search window will open when download is complete',
+                            100,parent=G2frame,style = wx.PD_ELAPSED_TIME)
+    try:
+        pdlg.CenterOnParent()
+        wx.GetApp().Yield()
+        GSASIIpath.getLLMindex()
+    finally:
+        pdlg.Destroy()
+
+def DownloadLLMfiles(G2frame,dlg,installIndex):
+    '''Download the llama model and/or the documentation index files for 
+    LLM searching. This is run in a background thread and only with 
+    the llama backend.
+    '''
+    if installIndex:
+        print('Installing index')
+        GSASIIpath.getLLMindex()
+    print('Installing model')
+    GSASIIpath.installLLamaModel()
+    if dlg:
+        try:
+            wx.CallAfter(dlg.Destroy)
+        except:
+            pass
+    model = GSASIIpath.testLLamaModel()
+    if model is None:
+        print('No model found after install attempt')
+        return
+    wx.CallAfter(LaunchLLama,G2frame)
+
+def LaunchLLama(G2frame):
+    'Start up the Query_gsas2 LLM dialog with a llama backend'
+    res = GSASIIpath.setupLLama()
+    font = int(14 + GSASII.GSASIIpath.GetConfigValue("FontSize_incr", 0))
+    if res:
+        import gsas_query.gui
+        gsas_query.gui.show_assistant(G2frame,font)
+    else:
+        print('Unable to launch llama')
+        
+def LLMsearch(event,repeat=False):
+    '''Master routine to perform LLM searching of documentation. 
+    Checks to see that needed modules and files are present and for 
+    index, recent. Asks user for permission to do installation/downloads 
+    where needed.
+    For llama, where the model is quite large, the download is 
+    performed in a background thread. 
+    '''
+    G2frame = event.GetEventObject().frame
+    while True:
+        res = GSASIIpath.testLLMquery()
+        if res: break
+        dlg = wx.MessageDialog(G2frame,
+                'Packages needed for this are not installed. '+
+                'Do you want to install the packages?',
+                'Install packages',wx.YES_NO | wx.ICON_QUESTION)
+        try:
+            result = dlg.ShowModal()
+        finally:
+            dlg.Destroy()
+        if result == wx.ID_NO: return
+        SelectPkgInstall(event)
+
+    # is the index present or old?
+    age = GSASIIpath.ageLLMindex()
+    installIndex = False
+    if age is None:
+        dlg = wx.MessageDialog(G2frame,
+                'You need the LLM index files. '+
+                'Do you want to download and install them?',
+                'Install index?',wx.YES_NO | wx.ICON_QUESTION)
+        try:
+            result = dlg.ShowModal()
+        finally:
+            dlg.Destroy()
+        if result == wx.ID_NO:
+            return
+        else:
+            installIndex = True
+    elif age > 15:
+        dlg = wx.MessageDialog(G2frame,
+                f'The LLM index files are {age:.1f} days old. '+
+                'You are recommended to update them. '+
+                'Do you want to download and update?',
+                'Install index?',wx.YES_NO | wx.ICON_QUESTION)
+        try:
+            result = dlg.ShowModal()
+        finally:
+            dlg.Destroy()
+        if result != wx.ID_NO:
+            installIndex = True
+    wx.GetApp().Yield()
+    if res == "llama":
+        import threading
+        model = GSASIIpath.testLLamaModel()
+        if model is None:
+            dlg = wx.MessageDialog(G2frame,
+                'You need to install the llama model (once). '+
+                'This is a >2 Gb download that will take a while,\n'+
+                'but GSAS-II can be used while the download is running in the background.\n\n'+
+                'Do you want to download and install this?',
+                'Install model?',wx.YES_NO | wx.ICON_QUESTION)
+            try:
+                result = dlg.ShowModal()
+            finally:
+                dlg.Destroy()
+            if result == wx.ID_NO: return
+            dlg = G2ModelessMessage(G2frame, 
+                'Download(s) are in progress. The "LLM\n'+
+                'Docs Search" window will open when complete.',
+                'Download in progress')
+            dlg.CenterOnParent()
+            thread = threading.Thread(target=DownloadLLMfiles,
+                                      args=(G2frame,dlg,installIndex))
+            thread.start()
+            return
+        else:
+            LaunchLLama(G2frame)
+    elif res == "ollama":
+        font = int(14 + GSASII.GSASIIpath.GetConfigValue("FontSize_incr", 0))
+        if installIndex: InstallLLMindex(G2frame)
+        res = GSASIIpath.setupOllama()
+        if res:
+            import gsas_query.gui
+            gsas_query.gui.show_assistant(G2frame,font)
+        else:
+            print('setupOllama did not complete properly')
+    else:
+        print('Unknown LLM',res)
 
 def HistogramNameTemplate(exporter,stripChars):
     '''Dialog to obtain a string value for grouping histograms
@@ -10803,7 +10701,7 @@ some or all the text that is in common between the histograms'''
         dlg.Destroy()
         exporter.fileNames = None
     else:
-        val = valItem.GetValue()
+        #val = valItem.GetValue()
         dlg.Destroy()
         exporter.fileNames = [ConvertHistname2File(i[5:]) for i in hists]
 
@@ -10812,6 +10710,23 @@ if __name__ == '__main__':
     GSASIIpath.InvokeDebugOpts()
     frm = wx.Frame(None) # create a frame
     ms = wx.BoxSizer(wx.VERTICAL)
+
+    dictlist = [{'InstrName': 'test1'},
+                {'InstrName': 'test2'}]
+    dictlist = [{'InstrName': ''},
+                {'InstrName': ''}]
+    keylist = ['InstrName', 'InstrName']
+    lbllist = ['PWDR sum_ceo2_8nm_sum.tiff Azm= 0.00', 'PWDR sum_ceo2_8nm_sum.tiff Azm= 0.00_1']
+    CallScrolledMultiEditor(
+                frm,dictlist,keylist,
+                prelbl=range(1,len(dictlist)+1),
+                postlbl=lbllist,
+                title='Instrument names',
+                header="Edit instrument names. Note that a non-blank\nname is required for all histograms",
+                CopyButton=True,ASCIIonly=True)
+
+
+    
     #siz = G2SliderWidget(pnl,valArr,'k','test slider w/entry',.2,1.2,100)
     #ms.Add(siz)
     #siz = G2SliderWidget(pnl,valArr,'k','test slider w/entry',20,50,.1)

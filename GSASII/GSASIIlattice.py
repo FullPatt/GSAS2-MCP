@@ -679,7 +679,8 @@ def GenAtomConstraints(oldPhase,newPhase,atCodes,Trans):
     :param list atCodes: a list strings where each element has the original 
         atom id and the operator for each new atom (I think: at#:opr#+x,y,z)
     :param np.array Trans: the transformation matrix
-    :returns: (constraints, message) where 
+    :returns: (constraints, message) where:
+ 
         * constraints is a list of constraints that should be added to the 
           Phase section of the constraints dict.
         * message is a message to display or None
@@ -744,7 +745,8 @@ def MatchGenAtomConstraints(oldPhase,newPhase,Trans,U,V):
     :param np.array Trans: the transformation matrix
     :param np.array U: the offset vector, subtracted before transformation matrix
     :param np.array V: the offset vector, added after transformation matrix
-    :returns: (constraints, message) where 
+    :returns: (constraints, message) where:
+ 
         * constraints is a list of constraints that should be added to the 
           Phase section of the constraints dict.
         * message is a message to display or None
@@ -970,7 +972,7 @@ def ExpandCell(Atoms,atCodes,cx,Trans):
     '''Expand a list of atoms to an new unit cell.
     
     :param list Atoms: atoms array as found in a Phase object
-    :param list atCodes:list of codes that describe symmetry applied to 
+    :param list atCodes: list of codes that describe symmetry applied to 
         generate atom from original position
     :param int cx: pointer to location of x coord in Atoms
     :param np.array Trans: 3x3 transformation matrix
@@ -3237,7 +3239,7 @@ def SphHarmAng(L,M,P,Th,Ph):
     #### TODO: this will be deprecated in scipy 1.17.0
         ylmp = spsp.sph_harm(M,L,rpd*Th,rpd*Ph)   #wants radians; order then degree
     except AttributeError: #new one sph_harm_y in scipy 1.15.1 but buggy?
-        ylmp = spsp.sph_harm_y(L,M,rpd*Th,rpd*Ph) #order L,M makes more sense
+        ylmp = spsp.sph_harm_y(L,M,rpd*Ph,rpd*Th) #order L,M makes more sense
 
     if M > 0:
         return (-1)**M*P*np.real(ylmp)*SQ2
