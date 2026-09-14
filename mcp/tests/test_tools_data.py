@@ -128,6 +128,34 @@ def test_add_phase_reports_a_missing_file(project, tmp_path) -> None:
     assert "No such phase file" in result["error"]
 
 
+def test_add_phase_reports_an_unknown_histogram(project) -> None:
+    """A mistyped histogram name is caught here, not inside GSAS-II.
+
+    GSAS-II builds a broken phase when the name does not resolve and then fails
+    with "'NoneType' object has no attribute 'name'", which tells an agent
+    nothing.  The tool must name the offending argument and list the real ones.
+    """
+    result = tools_data.add_phase(phasename="PbSO4", spacegroup="P 1",
+                                  cell=PB_SO4_CELL,
+                                  histograms=["PWDR NOPE.XRA"])
+
+    assert result["ok"] is False
+    assert "PWDR NOPE.XRA" in result["error"]
+    available = result["available_histograms"]
+    assert available, "the real histogram names must be offered back"
+    assert available[0] in result["hint"]
+    assert "NoneType" not in result["error"]
+
+
+def test_add_phase_links_every_histogram_by_default(project) -> None:
+    """Omitting histograms links the phase to the project's data."""
+    result = tools_data.add_phase(phasename="PbSO4-default", cell=PB_SO4_CELL)
+
+    assert result["ok"], result
+    assert result["linked_histograms"] == ["PWDR PBSO4.XRA Bank 1"]
+    assert result["phase"]["histograms"] == ["PWDR PBSO4.XRA Bank 1"]
+
+
 def test_phase_can_be_added_and_atoms_appended(project) -> None:
     """A phase built from scratch is editable through the GSAS-II objects."""
     added = tools_data.add_phase(phasename="Editable", cell=PB_SO4_CELL)

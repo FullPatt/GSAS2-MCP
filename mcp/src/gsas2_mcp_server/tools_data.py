@@ -139,6 +139,21 @@ def add_phase(phasefile: Optional[str] = None,
         wanted = [str(h) for h in (histograms or [])]
         if not wanted or any(h.lower() == "all" for h in wanted):
             wanted = [h.name for h in gpx.histograms()]
+        else:
+            # GSAS-II silently produces a broken phase when a history name does
+            # not resolve, then dies with "'NoneType' object has no attribute
+            # 'name'" inside its own code.  Check first and report the names
+            # that do exist, so an agent can correct itself in one round trip.
+            available = [h.name for h in gpx.histograms()]
+            missing = [h for h in wanted if h not in available]
+            if missing:
+                return engine.fail(
+                    "Unknown histogram name(s): {0}".format(", ".join(missing)),
+                    hint=('Histograms in this project: {0}. Pass ["all"] to link '
+                          'every histogram.').format(
+                              ", ".join(available) if available
+                              else "<none -- import a powder pattern first>"),
+                    available_histograms=available)
 
         kwargs: Dict[str, Any] = {}
         if phasename:
@@ -181,9 +196,14 @@ def add_phase(phasefile: Optional[str] = None,
             hint = _PYSPG_HINT
         elif _looks_like_missing_extension(exc):
             hint = _PYSPG_HINT
-        else:
+        elif phasefile is not None:
             hint = ("Check the phase file is a valid CIF and that fmthint matches "
                     "its format.")
+        else:
+            hint = ("Building a phase from scratch needs a phasename and, for "
+                    "anything other than P 1, the space-group tables; check the "
+                    "space group symbol, the cell, and that the project has at "
+                    "least one histogram.")
         return engine.fail(exc, hint=hint)
 
 
