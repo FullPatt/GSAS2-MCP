@@ -1,0 +1,11 @@
+# Runtime dependencies of the GSAS2-MCP protocol layer (mcp/).
+# The GSAS-II engine itself is NOT installed from PyPI; point the server at a
+# checkout with GSAS2_MCP_ENGINE, or install it separately.
+mcp>=1.0.0
+
+# Optional: only generate_plot needs matplotlib. The GSAS-II engine also uses
+# numpy/scipy, which are installed with the engine.
+# matplotlib>=3.6
+
+# Optional: the test-suite.
+# pytest>=7.0

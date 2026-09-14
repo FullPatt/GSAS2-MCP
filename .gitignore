@@ -50,3 +50,11 @@ build
 *.mod
 fortranobject.c
 fortranobject.h
+
+# Python packaging / test cruft for the MCP layer (mcp/)
+*.egg-info/
+.eggs/
+.pytest_cache/
+*.whl
+*.tar.gz
+mcp/src/*.egg-info/

@@ -143,8 +143,22 @@ Initialized in :func:`CompileVarDesc`.
 # create a default space group object for P1; N.B. fails when building documentation
 try:
     P1SGData = G2spc.SpcGroup('P 1')[1] # data structure for default space group
-except:
-    pass
+except Exception: # partially-initialized GSASIIspc (circular import) or no pyspg
+    # GSAS2-MCP fork patch.  This branch used to be a bare "except: pass",
+    # which left P1SGData undefined so that every later SetNewPhase() call
+    # died with "NameError: name 'P1SGData' is not defined".  P 1 has no
+    # symmetry to look up, so build the object directly instead.
+    # tests/test_p1_fallback.py pins this literal to G2spc.SpcGroup('P 1').
+    _I3 = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+    _zero = np.array([0, 0, 0])
+    P1SGData = {
+        'SpGrp': 'P 1', 'SGFixed': False, 'SGGray': False,
+        'SGLaue': '-1', 'SGInv': False, 'SGLatt': 'P', 'SGUniq': '',
+        'SGCen': np.array(([0, 0, 0],)), 'SGOps': [[_I3, _zero]], 'SGGen': [0],
+        'BNSlattsym': ['P', [0, 0, 0]],
+        'SGSys': 'triclinic', 'SGPolax': 'xyz', 'SGPtGrp': '1', 'SSGKl': [1],
+        'SGSpin': [1],
+    }
 
 def GetPhaseNames(fl):
     ''' Returns a list of phase names found under 'Phases' in GSASII gpx file

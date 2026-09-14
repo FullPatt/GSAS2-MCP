@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gsas2-mcp"
+version = "0.1.0"
+description = "MCP server exposing the GSAS-II diffraction analysis engine (Rietveld refinement, phase analysis, data import) to AI agents"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "BSD-3-Clause" }
+authors = [{ name = "FullPatt" }]
+keywords = [
+    "mcp", "model-context-protocol", "gsas-ii", "rietveld", "le-bail",
+    "powder-diffraction", "crystallography", "xrd", "neutron", "refinement",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "mcp>=1.0.0",
+]
+
+[project.optional-dependencies]
+# matplotlib is only needed by generate_plot.
+plot = ["matplotlib>=3.6"]
+test = ["pytest>=7.0"]
+
+[project.urls]
+Repository = "https://github.com/FullPatt/GSAS2-MCP"
+Issues = "https://github.com/FullPatt/GSAS2-MCP/issues"
+
+[project.scripts]
+gsas2-mcp = "gsas2_mcp_server.__main__:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]

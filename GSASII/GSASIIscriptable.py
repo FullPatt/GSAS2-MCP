@@ -4139,7 +4139,9 @@ class G2PwdrData(G2ObjectWrapper):
                 # If True or False, just set the refine parameter
                 if value in (True, False):
                     bkg[1] = value
-                    return
+                    continue    # GSAS2-MCP fix: was 'return', which silently
+                                # dropped every other key in the same call.
+                                # Modified by FullPatt (GSAS2-MCP).
 
                 if 'type' in value:
                     bkg[0] = value['type']
@@ -4207,7 +4209,9 @@ class G2PwdrData(G2ObjectWrapper):
                 # If True or False, just set the refine parameter
                 if value in (True, False):
                     bkg[1] = False
-                    return
+                    continue    # GSAS2-MCP fix: was 'return', which silently
+                                # dropped every other key in the same call.
+                                # Modified by FullPatt (GSAS2-MCP).
 
                 bkg[1] = False
                 if 'FixedPoints' in value:
